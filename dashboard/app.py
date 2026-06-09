@@ -149,13 +149,27 @@ try:
         )
 
     # Build ticker tape from latest macro features
+    TICKER_LABELS = {
+        "GDP_Growth_Mom3": "GDP Growth",
+        "Industrial_Production_YoY": "Ind. Prod.",
+        "Retail_Sales_YoY": "Retail Sales",
+        "Nonfarm_Payrolls_Chg3": "Payrolls",
+        "Unemployment_Rate": "Unemp. Rate",
+        "CPI_YoY": "CPI",
+        "Fed_Funds_Rate": "Fed Funds",
+        "Treasury_10Y_Yield": "10Y Yield",
+        "Credit_Spread": "Credit Sprd",
+        "VIX_Level": "VIX",
+        "SP500_Mom12": "S&P 500 Mom",
+        "Housing_Starts": "Housing",
+    }
     ticker_data = {}
     if macro_features is not None and len(macro_features) > 1:
         latest = macro_features.iloc[-1]
         prev = macro_features.iloc[-2]
         for col in list(macro_features.columns)[:8]:
-            short_name = col.replace("_Level", "").replace("_YoY", "").replace("_Chg3", "")[:12]
-            ticker_data[short_name] = {
+            label = TICKER_LABELS.get(col, col.replace("_", " ")[:14])
+            ticker_data[label] = {
                 "value": latest[col],
                 "change": latest[col] - prev[col],
                 "unit": "",
