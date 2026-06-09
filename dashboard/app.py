@@ -625,25 +625,34 @@ try:
     # TAB 4: TEAR SHEET
     # ═══════════════════════════════════════════════════════════════════════════
     with tab4:
-        if 'result' in dir() and result is not None:
-            render_tear_sheet(result)
-        else:
+        try:
+            if result is not None:
+                render_tear_sheet(result)
+            else:
+                st.info("Run backtest in the Backtest tab first to see tear sheet.")
+        except NameError:
             st.info("Run backtest in the Backtest tab first to see tear sheet.")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # TAB 5: STRESS TESTING
     # ═══════════════════════════════════════════════════════════════════════════
     with tab5:
-        allocator = TacticalAllocator(risk_aversion=risk_aversion)
-        render_stress_testing_page(
-            regimes, regime_proba, allocator, current_regime, market_returns, detector
-        )
+        try:
+            allocator = TacticalAllocator(risk_aversion=risk_aversion)
+            render_stress_testing_page(
+                regimes, regime_proba, allocator, current_regime, market_returns, detector
+            )
+        except Exception as e:
+            st.error(f"Stress testing error: {e}")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # TAB 6: MODEL SELECTION
     # ═══════════════════════════════════════════════════════════════════════════
     with tab6:
-        render_model_selection_page(macro_features, market_returns, n_regimes, pca_components)
+        try:
+            render_model_selection_page(macro_features, market_returns, n_regimes, pca_components)
+        except Exception as e:
+            st.error(f"Model selection error: {e}")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # TAB 7: MODEL DIAGNOSTICS
