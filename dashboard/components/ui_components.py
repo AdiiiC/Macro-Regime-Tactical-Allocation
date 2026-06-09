@@ -227,7 +227,7 @@ def _generate_sparkline_svg(data: List[float], width: int = 100, height: int = 3
     """
 
 
-def styled_dataframe(df: pd.DataFrame, highlight_cols: Optional[List[str]] = None):
+def styled_dataframe(df: pd.DataFrame, highlight_cols: Optional[List[str]] = None, height: Optional[int] = None):
     """Render a styled DataFrame with heatmap coloring."""
     styler = df.style
 
@@ -238,4 +238,4 @@ def styled_dataframe(df: pd.DataFrame, highlight_cols: Optional[List[str]] = Non
                     subset=[col], cmap="RdYlGn", vmin=-0.1, vmax=0.1
                 )
 
-    st.dataframe(styler, use_container_width=True)
+    st.dataframe(styler, use_container_width=True, height=height)
