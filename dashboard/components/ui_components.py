@@ -20,17 +20,7 @@ def inject_custom_css():
 
 def render_header():
     """Render branded header bar."""
-    st.markdown("""
-    <div class="header-bar">
-        <div>
-            <h1>◈ Macro Regime Engine</h1>
-            <div class="subtitle">Tactical Asset Allocation System</div>
-        </div>
-        <div style="text-align: right; color: #6b7d93; font-size: 0.8rem;">
-            Hidden Markov Model · 9 Asset Classes · Walk-Forward
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="header-bar"><div><h1>◈ Macro Regime Engine</h1><div class="subtitle">Tactical Asset Allocation System</div></div><div style="text-align: right; color: #6b7d93; font-size: 0.8rem;">Hidden Markov Model · 9 Asset Classes · Walk-Forward</div></div>', unsafe_allow_html=True)
 
 
 def render_ticker_tape(indicators: Dict[str, Dict]):
@@ -56,13 +46,7 @@ def render_ticker_tape(indicators: Dict[str, Dict]):
             arrow = "─"
             css_class = ""
 
-        items_html += f"""
-        <span class="ticker-item">
-            <span class="label">{name}</span>
-            <span class="value">{value:.2f}{unit}</span>
-            <span class="{css_class}"> {arrow} {abs(change):.2f}</span>
-        </span>
-        """
+        items_html += f'<span class="ticker-item"><span class="label">{name}</span><span class="value">{value:.2f}{unit}</span><span class="{css_class}"> {arrow} {abs(change):.2f}</span></span>'
 
     st.markdown(f'<div class="ticker-tape">{items_html}</div>', unsafe_allow_html=True)
 
@@ -88,14 +72,7 @@ def render_kpi_card(
 
     regime_css = f"regime-{regime_class.lower()}" if regime_class else ""
 
-    return f"""
-    <div class="kpi-card {regime_css}">
-        <div class="kpi-label">{label}</div>
-        <div class="kpi-value">{value}</div>
-        {delta_html}
-        {sparkline_html}
-    </div>
-    """
+    return f'<div class="kpi-card {regime_css}"><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div>{delta_html}{sparkline_html}</div>'
 
 
 def render_kpi_row(cards: List[str]):
@@ -118,12 +95,7 @@ def render_regime_badge(regime: str, confidence: float):
     }
     icon = icon_map.get(css_class, "◉")
 
-    st.markdown(f"""
-    <div class="regime-badge {css_class}">
-        {icon} {regime} <span style="opacity:0.7; margin-left:0.5rem; font-size:0.8rem;">
-        ({confidence:.0%} confidence)</span>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f'<div class="regime-badge {css_class}">{icon} {regime} <span style="opacity:0.7; margin-left:0.5rem; font-size:0.8rem;">({confidence:.0%} confidence)</span></div>', unsafe_allow_html=True)
 
 
 def render_confidence_gauge(confidence: float):
@@ -140,58 +112,34 @@ def render_confidence_gauge(confidence: float):
     else:
         color = "#e74c3c"
 
-    svg = f"""
-    <div style="text-align: center;">
-        <svg width="80" height="80" viewBox="0 0 80 80">
-            <circle cx="40" cy="40" r="{radius}" fill="none"
-                    stroke="#2a3a4e" stroke-width="6"/>
-            <circle cx="40" cy="40" r="{radius}" fill="none"
-                    stroke="{color}" stroke-width="6"
-                    stroke-dasharray="{circumference}"
-                    stroke-dashoffset="{offset}"
-                    stroke-linecap="round"
-                    transform="rotate(-90 40 40)"/>
-            <text x="40" y="38" text-anchor="middle" fill="#ffffff"
-                  font-size="14" font-weight="700">{confidence:.0%}</text>
-            <text x="40" y="52" text-anchor="middle" fill="#6b7d93"
-                  font-size="8">CONFIDENCE</text>
-        </svg>
-    </div>
-    """
+    svg = (
+        f'<div style="text-align: center;">'
+        f'<svg width="80" height="80" viewBox="0 0 80 80">'
+        f'<circle cx="40" cy="40" r="{radius}" fill="none" stroke="#2a3a4e" stroke-width="6"/>'
+        f'<circle cx="40" cy="40" r="{radius}" fill="none" stroke="{color}" stroke-width="6" '
+        f'stroke-dasharray="{circumference}" stroke-dashoffset="{offset}" '
+        f'stroke-linecap="round" transform="rotate(-90 40 40)"/>'
+        f'<text x="40" y="38" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="700">{confidence:.0%}</text>'
+        f'<text x="40" y="52" text-anchor="middle" fill="#6b7d93" font-size="8">CONFIDENCE</text>'
+        f'</svg></div>'
+    )
     st.markdown(svg, unsafe_allow_html=True)
 
 
 def render_sidebar_freshness(last_updated: str, model_status: str = "Active"):
     """Render data freshness indicator in sidebar."""
     status_color = "#2ecc71" if model_status == "Active" else "#f39c12"
-    st.markdown(f"""
-    <div class="sidebar-freshness">
-        <span class="label">Data Status</span>
-        <span class="value" style="color: {status_color};">● {model_status}</span>
-        <br/>
-        <span class="label" style="margin-top: 0.3rem;">Last Updated</span>
-        <span class="value">{last_updated}</span>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f'<div class="sidebar-freshness"><span class="label">Data Status</span><span class="value" style="color: {status_color};">● {model_status}</span><br/><span class="label" style="margin-top: 0.3rem;">Last Updated</span><span class="value">{last_updated}</span></div>', unsafe_allow_html=True)
 
 
 def render_section_header(title: str, icon: str = ""):
     """Render a styled section header."""
-    st.markdown(f"""
-    <div class="section-header">
-        <span style="font-size: 1.3rem;">{icon}</span>
-        <h2>{title}</h2>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f'<div class="section-header"><span style="font-size: 1.3rem;">{icon}</span><h2>{title}</h2></div>', unsafe_allow_html=True)
 
 
 def render_whatif_panel():
     """Render What-If scenario panel header."""
-    st.markdown("""
-    <div class="whatif-panel">
-        <h3>⚡ What-If Scenario Analysis</h3>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="whatif-panel"><h3>⚡ What-If Scenario Analysis</h3></div>', unsafe_allow_html=True)
 
 
 def _generate_sparkline_svg(data: List[float], width: int = 100, height: int = 30) -> str:
@@ -217,14 +165,7 @@ def _generate_sparkline_svg(data: List[float], width: int = 100, height: int = 3
     # Determine color based on trend
     color = "#2ecc71" if data[-1] > data[0] else "#e74c3c"
 
-    return f"""
-    <div class="kpi-sparkline">
-        <svg width="{width}" height="{height}" viewBox="0 0 {width} {height}">
-            <polyline points="{polyline}" fill="none"
-                      stroke="{color}" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-    </div>
-    """
+    return f'<div class="kpi-sparkline"><svg width="{width}" height="{height}" viewBox="0 0 {width} {height}"><polyline points="{polyline}" fill="none" stroke="{color}" stroke-width="1.5" stroke-linecap="round"/></svg></div>'
 
 
 def styled_dataframe(df: pd.DataFrame, highlight_cols: Optional[List[str]] = None, height: Optional[int] = None):

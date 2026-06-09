@@ -111,6 +111,104 @@ def generate_synthetic_market_returns(regimes):
     return returns
 
 
+def generate_india_macro_features():
+    """Generate realistic synthetic India macro features with regime structure."""
+    n_months = 240  # 20 years
+    dates = pd.date_range("2005-01-01", periods=n_months, freq="ME")
+
+    # India regime sequence (slightly different cycle timing)
+    regimes = []
+    regime_order = ["Expansion", "Slowdown", "Recession", "Recovery"]
+    durations = [28, 10, 8, 14]  # India: longer expansions, shorter recessions
+
+    idx = 0
+    while len(regimes) < n_months:
+        r = regime_order[idx % 4]
+        d = durations[idx % 4] + np.random.randint(-3, 5)
+        d = max(5, d)
+        regimes.extend([r] * d)
+        idx += 1
+
+    regimes = regimes[:n_months]
+
+    # India-specific regime characteristics
+    regime_means = {
+        "Expansion": np.array([1.2, 0.9, -0.4, -0.3, 0.5, 0.8, -0.6, 1.0]),
+        "Slowdown": np.array([-0.2, -0.3, 0.6, 0.8, -0.2, -0.3, 0.5, -0.3]),
+        "Recession": np.array([-1.5, -1.0, 1.5, 1.2, -0.8, -1.2, 1.0, -1.0]),
+        "Recovery": np.array([0.6, 0.4, -0.2, -0.4, 0.3, 0.5, -0.3, 0.5]),
+    }
+
+    columns = [
+        "India_CPI_YoY", "India_Industrial_Production_YoY",
+        "India_Repo_Rate_Level", "India_USD_INR_Level",
+        "India_M2_YoY", "India_GDP_Growth_Level",
+        "India_Unemployment_Level", "India_WPI_YoY",
+    ]
+
+    data = np.zeros((n_months, 8))
+    for i, regime in enumerate(regimes):
+        mean = regime_means[regime]
+        if i > 0:
+            data[i] = 0.7 * data[i - 1] + 0.3 * mean + np.random.randn(8) * 0.35
+        else:
+            data[i] = mean + np.random.randn(8) * 0.35
+
+    features = pd.DataFrame(data, index=dates, columns=columns)
+    return features, regimes
+
+
+def generate_india_market_returns(regimes):
+    """Generate synthetic Indian asset returns conditioned on regimes."""
+    n_months = len(regimes)
+    dates = pd.date_range("2005-01-01", periods=n_months, freq="ME")
+
+    regime_returns = {
+        "Expansion": {
+            "Nifty_50": 0.015, "Bank_Nifty": 0.018, "Nifty_Midcap": 0.020,
+            "Gold_INR": 0.003, "G_Sec_Long": 0.004, "Liquid_Fund": 0.005,
+            "Nifty_IT": 0.012,
+        },
+        "Slowdown": {
+            "Nifty_50": 0.002, "Bank_Nifty": -0.005, "Nifty_Midcap": -0.003,
+            "Gold_INR": 0.008, "G_Sec_Long": 0.005, "Liquid_Fund": 0.004,
+            "Nifty_IT": 0.004,
+        },
+        "Recession": {
+            "Nifty_50": -0.030, "Bank_Nifty": -0.040, "Nifty_Midcap": -0.045,
+            "Gold_INR": 0.012, "G_Sec_Long": 0.006, "Liquid_Fund": 0.003,
+            "Nifty_IT": -0.015,
+        },
+        "Recovery": {
+            "Nifty_50": 0.018, "Bank_Nifty": 0.022, "Nifty_Midcap": 0.025,
+            "Gold_INR": 0.005, "G_Sec_Long": 0.004, "Liquid_Fund": 0.004,
+            "Nifty_IT": 0.015,
+        },
+    }
+
+    vols = {
+        "Nifty_50": 0.055, "Bank_Nifty": 0.070, "Nifty_Midcap": 0.075,
+        "Gold_INR": 0.035, "G_Sec_Long": 0.012, "Liquid_Fund": 0.002,
+        "Nifty_IT": 0.060,
+    }
+
+    assets = list(vols.keys())
+    returns_data = {}
+
+    for asset in assets:
+        rets = []
+        for regime in regimes:
+            mean = regime_returns[regime][asset]
+            vol = vols[asset]
+            if regime == "Recession":
+                vol *= 1.6
+            rets.append(np.random.normal(mean, vol))
+        returns_data[asset] = rets
+
+    returns = pd.DataFrame(returns_data, index=dates)
+    return returns
+
+
 if __name__ == "__main__":
     print("Generating synthetic data for demo mode...")
 
@@ -124,10 +222,24 @@ if __name__ == "__main__":
     features.to_parquet(os.path.join(cache_dir, "macro_features.parquet"))
     returns.to_parquet(os.path.join(cache_dir, "market_returns.parquet"))
 
-    print(f"✅ Saved {len(features)} months of macro features")
-    print(f"✅ Saved {len(returns)} months of market returns")
-    print(f"📁 Cache directory: {cache_dir}")
-    print(f"\nRegime distribution:")
+    print(f"✅ Saved {len(features)} months of US macro features")
+    print(f"✅ Saved {len(returns)} months of US market returns")
+
+    # ─── India Demo Data ───────────────────────────────────────────────────
+    india_features, india_regimes = generate_india_macro_features()
+    india_returns = generate_india_market_returns(india_regimes)
+
+    india_features.to_parquet(os.path.join(cache_dir, "india_macro_features.parquet"))
+    india_returns.to_parquet(os.path.join(cache_dir, "india_market_returns.parquet"))
+
+    print(f"✅ Saved {len(india_features)} months of India macro features")
+    print(f"✅ Saved {len(india_returns)} months of India market returns")
+
+    print(f"\n📁 Cache directory: {cache_dir}")
+    print(f"\nUS Regime distribution:")
     regime_series = pd.Series(regimes)
     print(regime_series.value_counts())
+    print(f"\nIndia Regime distribution:")
+    india_regime_series = pd.Series(india_regimes)
+    print(india_regime_series.value_counts())
     print(f"\nRun the dashboard: streamlit run dashboard/app.py")

@@ -22,8 +22,16 @@ from config.settings import (
     BENCHMARK_ALLOCATION,
     HMM_N_REGIMES,
 )
+from config.india_settings import (
+    INDIA_REGIME_ALLOCATIONS,
+    INDIA_BENCHMARK_ALLOCATION,
+    INDIA_TICKER_LABELS,
+    INDIA_REGIME_EXPLANATIONS,
+)
 from data.fred_pipeline import MacroDataPipeline, load_cached_data, save_cached_data
 from data.market_data import MarketDataPipeline
+from data.india_pipeline import IndiaDataPipeline, load_cached_india_data, save_cached_india_data
+from data.india_market import IndiaMarketDataPipeline
 from models.regime_hmm import RegimeDetector
 from models.allocator import TacticalAllocator
 from backtesting.engine import BacktestEngine, BacktestResult
@@ -62,6 +70,12 @@ st.markdown("")  # spacer after header
 st.sidebar.image("https://img.icons8.com/fluency/48/graph-report.png", width=40)
 st.sidebar.markdown("## ⚙️ Configuration")
 
+country = st.sidebar.radio(
+    "🌍 Market",
+    ["🇺🇸 United States", "🇮🇳 India"],
+    index=0,
+)
+
 data_source = st.sidebar.radio(
     "Data Source",
     ["Live (FRED API)", "Cached (Demo)"],
@@ -90,36 +104,57 @@ export_pdf = st.sidebar.button("📥 Generate PDF Report")
 
 # ─── Data Loading ──────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600)
-def load_data(source: str, start: str, end: str):
-    """Load macro and market data."""
+def load_data(source: str, start: str, end: str, market: str = "US"):
+    """Load macro and market data for selected country."""
     cache_dir = os.path.join(os.path.dirname(__file__), "..", "data", "cache")
     os.makedirs(cache_dir, exist_ok=True)
 
-    macro_cache = os.path.join(cache_dir, "macro_features.parquet")
-    market_cache = os.path.join(cache_dir, "market_returns.parquet")
+    if market == "India":
+        macro_cache = os.path.join(cache_dir, "india_macro_features.parquet")
+        market_cache = os.path.join(cache_dir, "india_market_returns.parquet")
 
-    if source == "Cached (Demo)" and os.path.exists(macro_cache):
-        macro_features = pd.read_parquet(macro_cache)
-        market_returns = pd.read_parquet(market_cache)
+        if source == "Cached (Demo)" and os.path.exists(macro_cache):
+            macro_features = pd.read_parquet(macro_cache)
+            market_returns = pd.read_parquet(market_cache)
+        else:
+            pipeline = IndiaDataPipeline()
+            pipeline.fetch_all_indicators(start=start, end=end)
+            macro_features = pipeline.get_model_ready_data()
+            save_cached_india_data(macro_features, macro_cache)
+
+            market = IndiaMarketDataPipeline()
+            market_returns = market.compute_returns(frequency="M")
+            save_cached_india_data(market_returns, market_cache)
     else:
-        # Fetch from FRED
-        pipeline = MacroDataPipeline()
-        pipeline.fetch_all_indicators(start=start, end=end)
-        macro_features = pipeline.get_model_ready_data()
-        save_cached_data(macro_features, macro_cache)
+        macro_cache = os.path.join(cache_dir, "macro_features.parquet")
+        market_cache = os.path.join(cache_dir, "market_returns.parquet")
 
-        # Fetch market data
-        market = MarketDataPipeline()
-        market_returns = market.compute_returns(frequency="M")
-        save_cached_data(market_returns, market_cache)
+        if source == "Cached (Demo)" and os.path.exists(macro_cache):
+            macro_features = pd.read_parquet(macro_cache)
+            market_returns = pd.read_parquet(market_cache)
+        else:
+            pipeline = MacroDataPipeline()
+            pipeline.fetch_all_indicators(start=start, end=end)
+            macro_features = pipeline.get_model_ready_data()
+            save_cached_data(macro_features, macro_cache)
+
+            mkt = MarketDataPipeline()
+            market_returns = mkt.compute_returns(frequency="M")
+            save_cached_data(market_returns, market_cache)
 
     return macro_features, market_returns
 
 
 # ─── Main Logic ────────────────────────────────────────────────────────────────
+is_india = country == "🇮🇳 India"
+active_regime_allocs = INDIA_REGIME_ALLOCATIONS if is_india else REGIME_ALLOCATIONS
+active_benchmark = INDIA_BENCHMARK_ALLOCATION if is_india else BENCHMARK_ALLOCATION
+active_ticker_labels = INDIA_TICKER_LABELS if is_india else None
+
 try:
     macro_features, market_returns = load_data(
-        data_source, f"{start_year}-01-01", f"{end_year}-12-31"
+        data_source, f"{start_year}-01-01", f"{end_year}-12-31",
+        market="India" if is_india else "US",
     )
 
     # Fit regime model
@@ -149,7 +184,7 @@ try:
         )
 
     # Build ticker tape from latest macro features
-    TICKER_LABELS = {
+    US_TICKER_LABELS = {
         "GDP_YoY": "GDP YoY",
         "GDP_Mom3": "GDP Momentum",
         "Industrial_Production_YoY": "Ind. Prod. YoY",
@@ -179,12 +214,13 @@ try:
         "Unemployment_Rate_Level": "Unemp. Rate",
         "Financial_Stress_Level": "Fin. Stress",
     }
+    label_map = INDIA_TICKER_LABELS if is_india else US_TICKER_LABELS
     ticker_data = {}
     if macro_features is not None and len(macro_features) > 1:
         latest = macro_features.iloc[-1]
         prev = macro_features.iloc[-2]
         for col in list(macro_features.columns)[:8]:
-            label = TICKER_LABELS.get(col, col.replace("_", " "))
+            label = label_map.get(col, col.replace("_", " "))
             ticker_data[label] = {
                 "value": latest[col],
                 "change": latest[col] - prev[col],
@@ -369,7 +405,7 @@ try:
     with tab2:
         render_section_header("Tactical Asset Allocation", "📈")
 
-        allocator = TacticalAllocator(risk_aversion=risk_aversion)
+        allocator = TacticalAllocator(risk_aversion=risk_aversion, regime_allocations=active_regime_allocs)
 
         # ─── What-If Panel ────────────────────────────────────────────────────
         with st.expander("⚡ What-If Scenario — Override Regime Manually", expanded=False):
@@ -423,13 +459,14 @@ try:
             st.plotly_chart(fig_alloc, use_container_width=True)
 
         with col2:
-            st.subheader("Benchmark (60/40)")
-            bench = pd.Series(BENCHMARK_ALLOCATION)
+            bench_label = "Benchmark" if is_india else "Benchmark (60/40)"
+            st.subheader(bench_label)
+            bench = pd.Series(active_benchmark)
             bench = bench[bench > 0]
             fig_bench = px.pie(
                 values=bench.values,
                 names=bench.index,
-                title="Benchmark — 60/40 Portfolio",
+                title=f"Benchmark — {bench_label}",
                 color_discrete_sequence=px.colors.qualitative.Pastel,
                 hole=0.4,
             )
@@ -441,7 +478,7 @@ try:
 
         # Regime allocation comparison
         st.subheader("Allocation by Regime")
-        alloc_df = pd.DataFrame(REGIME_ALLOCATIONS).T
+        alloc_df = pd.DataFrame(active_regime_allocs).T
         fig_alloc_compare = px.bar(
             alloc_df,
             barmode="stack",
@@ -487,15 +524,19 @@ try:
         # Prepare regime allocations as dict of Series
         regime_alloc_series = {
             name: pd.Series(weights)
-            for name, weights in REGIME_ALLOCATIONS.items()
+            for name, weights in active_regime_allocs.items()
         }
 
-        # Align data
-        common_idx = market_returns.index.intersection(regimes.index)
+        # Align data — normalize to month-end for robust matching
+        market_monthly = market_returns.copy()
+        market_monthly.index = market_monthly.index.to_period("M").to_timestamp("M")
+        regimes_monthly = regimes.copy()
+        regimes_monthly.index = regimes_monthly.index.to_period("M").to_timestamp("M")
+        common_idx = market_monthly.index.intersection(regimes_monthly.index)
         if len(common_idx) > 12:
             result = engine.run(
-                asset_returns=market_returns.loc[common_idx],
-                regime_signals=regimes.loc[common_idx],
+                asset_returns=market_monthly.loc[common_idx],
+                regime_signals=regimes_monthly.loc[common_idx],
                 regime_allocations=regime_alloc_series,
             )
 
@@ -638,7 +679,7 @@ try:
     # ═══════════════════════════════════════════════════════════════════════════
     with tab5:
         try:
-            allocator = TacticalAllocator(risk_aversion=risk_aversion)
+            allocator = TacticalAllocator(risk_aversion=risk_aversion, regime_allocations=active_regime_allocs)
             render_stress_testing_page(
                 regimes, regime_proba, allocator, current_regime, market_returns, detector
             )
@@ -740,7 +781,7 @@ try:
     # ═══════════════════════════════════════════════════════════════════════════
     if export_pdf:
         with st.spinner("Generating PDF report..."):
-            allocator_pdf = TacticalAllocator(risk_aversion=risk_aversion)
+            allocator_pdf = TacticalAllocator(risk_aversion=risk_aversion, regime_allocations=active_regime_allocs)
             confidence_pdf = regime_proba.iloc[-1].max()
             alloc_pdf = allocator_pdf.get_target_allocation(current_regime, confidence_pdf)
 
