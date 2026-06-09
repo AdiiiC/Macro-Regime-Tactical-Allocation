@@ -150,25 +150,41 @@ try:
 
     # Build ticker tape from latest macro features
     TICKER_LABELS = {
-        "GDP_Growth_Mom3": "GDP Growth",
-        "Industrial_Production_YoY": "Ind. Prod.",
-        "Retail_Sales_YoY": "Retail Sales",
-        "Nonfarm_Payrolls_Chg3": "Payrolls",
-        "Unemployment_Rate": "Unemp. Rate",
-        "CPI_YoY": "CPI",
-        "Fed_Funds_Rate": "Fed Funds",
-        "Treasury_10Y_Yield": "10Y Yield",
-        "Credit_Spread": "Credit Sprd",
+        "GDP_YoY": "GDP YoY",
+        "GDP_Mom3": "GDP Momentum",
+        "Industrial_Production_YoY": "Ind. Prod. YoY",
+        "Industrial_Production_Mom3": "Ind. Prod. Mom",
+        "Retail_Sales_YoY": "Retail Sales YoY",
+        "Retail_Sales_Mom3": "Retail Sales Mom",
+        "Nonfarm_Payrolls_YoY": "Payrolls YoY",
+        "Nonfarm_Payrolls_Mom3": "Payrolls Mom",
+        "CPI_YoY": "CPI YoY",
+        "CPI_Mom3": "CPI Momentum",
+        "Core_CPI_YoY": "Core CPI YoY",
+        "Core_CPI_Mom3": "Core CPI Mom",
+        "PPI_YoY": "PPI YoY",
+        "M2_YoY": "M2 Growth",
+        "Housing_Starts_YoY": "Housing YoY",
+        "Fed_Funds_Rate_Level": "Fed Funds",
+        "Fed_Funds_Rate_Chg3": "Fed Funds Δ3m",
+        "Treasury_10Y_Level": "10Y Yield",
+        "Treasury_10Y_Chg3": "10Y Yield Δ3m",
+        "Treasury_2Y_Level": "2Y Yield",
+        "Yield_Spread_10Y2Y_Level": "Yield Curve",
+        "Yield_Spread_10Y2Y_Chg3": "Yield Curve Δ",
+        "BAA_Spread_Level": "Credit Spread",
+        "High_Yield_Spread_Level": "HY Spread",
         "VIX_Level": "VIX",
-        "SP500_Mom12": "S&P 500 Mom",
-        "Housing_Starts": "Housing",
+        "VIX_Chg3": "VIX Δ3m",
+        "Unemployment_Rate_Level": "Unemp. Rate",
+        "Financial_Stress_Level": "Fin. Stress",
     }
     ticker_data = {}
     if macro_features is not None and len(macro_features) > 1:
         latest = macro_features.iloc[-1]
         prev = macro_features.iloc[-2]
         for col in list(macro_features.columns)[:8]:
-            label = TICKER_LABELS.get(col, col.replace("_", " ")[:14])
+            label = TICKER_LABELS.get(col, col.replace("_", " "))
             ticker_data[label] = {
                 "value": latest[col],
                 "change": latest[col] - prev[col],
