@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  dashboard:
+    build: .
+    container_name: macro-regime-dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      - FRED_API_KEY=${FRED_API_KEY:-YOUR_FRED_API_KEY}
+    volumes:
+      - ./data/cache:/app/data/cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  api:
+    build: .
+    container_name: macro-regime-api
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    environment:
+      - FRED_API_KEY=${FRED_API_KEY:-YOUR_FRED_API_KEY}
+    volumes:
+      - ./data/cache:/app/data/cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

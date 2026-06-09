@@ -1,0 +1,586 @@
+"""
+Streamlit Dashboard — Macro Regime Detection & Tactical Allocation
+Multi-page app with regime visualization, allocation, and backtest results.
+"""
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from config.settings import (
+    REGIME_COLORS,
+    REGIME_ALLOCATIONS,
+    ASSET_TICKERS,
+    BENCHMARK_ALLOCATION,
+    HMM_N_REGIMES,
+)
+from data.fred_pipeline import MacroDataPipeline, load_cached_data, save_cached_data
+from data.market_data import MarketDataPipeline
+from models.regime_hmm import RegimeDetector
+from models.allocator import TacticalAllocator
+from backtesting.engine import BacktestEngine, BacktestResult
+from dashboard.pages.stress_testing import render_stress_testing_page
+from dashboard.pages.tear_sheet import render_tear_sheet
+from dashboard.pages.model_selection import render_model_selection_page
+from reports.pdf_generator import PDFReportGenerator
+
+# ─── Page Config ────────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Macro Regime Tactical Allocation",
+    page_icon="🏦",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+st.title("📊 Macro Regime Detection & Tactical Asset Allocation")
+st.markdown("---")
+
+
+# ─── Sidebar ───────────────────────────────────────────────────────────────────
+st.sidebar.header("⚙️ Configuration")
+
+data_source = st.sidebar.radio(
+    "Data Source",
+    ["Live (FRED API)", "Cached (Demo)"],
+    index=1,
+)
+
+n_regimes = st.sidebar.slider("Number of Regimes", 2, 6, HMM_N_REGIMES)
+pca_components = st.sidebar.slider("PCA Components", 3, 10, 5)
+risk_aversion = st.sidebar.slider("Risk Aversion (λ)", 0.5, 5.0, 2.5, 0.5)
+
+st.sidebar.markdown("---")
+st.sidebar.header("📅 Backtest Period")
+start_year = st.sidebar.slider("Start Year", 2005, 2024, 2005)
+end_year = st.sidebar.slider("End Year", 2010, 2026, 2026)
+
+st.sidebar.markdown("---")
+st.sidebar.header("📄 Export")
+export_pdf = st.sidebar.button("📥 Generate PDF Report")
+
+
+# ─── Data Loading ──────────────────────────────────────────────────────────────
+@st.cache_data(ttl=3600)
+def load_data(source: str, start: str, end: str):
+    """Load macro and market data."""
+    cache_dir = os.path.join(os.path.dirname(__file__), "..", "data", "cache")
+    os.makedirs(cache_dir, exist_ok=True)
+
+    macro_cache = os.path.join(cache_dir, "macro_features.parquet")
+    market_cache = os.path.join(cache_dir, "market_returns.parquet")
+
+    if source == "Cached (Demo)" and os.path.exists(macro_cache):
+        macro_features = pd.read_parquet(macro_cache)
+        market_returns = pd.read_parquet(market_cache)
+    else:
+        # Fetch from FRED
+        pipeline = MacroDataPipeline()
+        pipeline.fetch_all_indicators(start=start, end=end)
+        macro_features = pipeline.get_model_ready_data()
+        save_cached_data(macro_features, macro_cache)
+
+        # Fetch market data
+        market = MarketDataPipeline()
+        market_returns = market.compute_returns(frequency="M")
+        save_cached_data(market_returns, market_cache)
+
+    return macro_features, market_returns
+
+
+# ─── Main Logic ────────────────────────────────────────────────────────────────
+try:
+    macro_features, market_returns = load_data(
+        data_source, f"{start_year}-01-01", f"{end_year}-12-31"
+    )
+
+    # Fit regime model
+    detector = RegimeDetector(n_regimes=n_regimes, n_components_pca=pca_components)
+    detector.fit(macro_features)
+    regimes = detector.predict(macro_features)
+    regime_proba = detector.predict_proba(macro_features)
+
+    # ─── Tab Layout ────────────────────────────────────────────────────────────
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+        "🔍 Regime Detection",
+        "📈 Allocation",
+        "🧪 Backtest",
+        "📋 Tear Sheet",
+        "🎲 Stress Testing",
+        "🔬 Model Selection",
+        "📊 Model Diagnostics",
+        "📋 Leading Indicators",
+    ])
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # TAB 1: REGIME DETECTION
+    # ═══════════════════════════════════════════════════════════════════════════
+    with tab1:
+        st.header("Macro Regime Timeline")
+
+        # Current regime
+        current_regime = regimes.iloc[-1]
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Current Regime", current_regime)
+        with col2:
+            duration = detector.get_expected_duration()
+            st.metric(
+                "Expected Duration",
+                f"{duration.get(current_regime, 0):.1f} months",
+            )
+        with col3:
+            current_proba = regime_proba.iloc[-1]
+            confidence = current_proba.max()
+            st.metric("Model Confidence", f"{confidence:.1%}")
+
+        st.markdown("---")
+
+        # Regime timeline chart
+        fig_timeline = go.Figure()
+
+        # Add colored background for regimes
+        for regime_name, color in REGIME_COLORS.items():
+            mask = regimes == regime_name
+            if mask.any():
+                regime_dates = regimes[mask].index
+                for date in regime_dates:
+                    fig_timeline.add_vrect(
+                        x0=date - pd.DateOffset(days=15),
+                        x1=date + pd.DateOffset(days=15),
+                        fillcolor=color,
+                        opacity=0.3,
+                        layer="below",
+                        line_width=0,
+                    )
+
+        fig_timeline.update_layout(
+            title="Economic Regime Classification Over Time",
+            xaxis_title="Date",
+            yaxis_title="Regime",
+            height=300,
+            showlegend=True,
+        )
+
+        # Add regime probability stacked area
+        fig_proba = go.Figure()
+        for col in regime_proba.columns:
+            fig_proba.add_trace(
+                go.Scatter(
+                    x=regime_proba.index,
+                    y=regime_proba[col],
+                    name=col,
+                    stackgroup="one",
+                    fillcolor=REGIME_COLORS.get(col, "#999999"),
+                    line=dict(width=0.5),
+                )
+            )
+        fig_proba.update_layout(
+            title="Regime Probabilities Over Time",
+            xaxis_title="Date",
+            yaxis_title="Probability",
+            height=400,
+            yaxis=dict(range=[0, 1]),
+        )
+        st.plotly_chart(fig_proba, use_container_width=True)
+
+        # Transition matrix
+        st.subheader("Regime Transition Matrix")
+        trans_matrix = detector.get_transition_matrix()
+        fig_trans = px.imshow(
+            trans_matrix,
+            text_auto=".2f",
+            color_continuous_scale="Blues",
+            title="Monthly Transition Probabilities",
+        )
+        st.plotly_chart(fig_trans, use_container_width=True)
+
+        # Stationary distribution
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Stationary Distribution")
+            stat_dist = detector.get_stationary_distribution()
+            fig_stat = px.pie(
+                values=stat_dist.values,
+                names=stat_dist.index,
+                color=stat_dist.index,
+                color_discrete_map=REGIME_COLORS,
+            )
+            st.plotly_chart(fig_stat, use_container_width=True)
+
+        with col2:
+            st.subheader("Expected Duration per Regime")
+            st.dataframe(
+                duration.to_frame("Months").style.format("{:.1f}"),
+                use_container_width=True,
+            )
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # TAB 2: ALLOCATION
+    # ═══════════════════════════════════════════════════════════════════════════
+    with tab2:
+        st.header("Tactical Asset Allocation")
+
+        allocator = TacticalAllocator(risk_aversion=risk_aversion)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader(f"Current Allocation ({current_regime})")
+            current_alloc = allocator.get_target_allocation(
+                current_regime, confidence=confidence
+            )
+            fig_alloc = px.pie(
+                values=current_alloc.values,
+                names=current_alloc.index,
+                title=f"Target Weights — {current_regime} Regime",
+            )
+            st.plotly_chart(fig_alloc, use_container_width=True)
+
+        with col2:
+            st.subheader("Benchmark (60/40)")
+            bench = pd.Series(BENCHMARK_ALLOCATION)
+            bench = bench[bench > 0]
+            fig_bench = px.pie(
+                values=bench.values,
+                names=bench.index,
+                title="Benchmark — 60/40 Portfolio",
+            )
+            st.plotly_chart(fig_bench, use_container_width=True)
+
+        # Regime allocation comparison
+        st.subheader("Allocation by Regime")
+        alloc_df = pd.DataFrame(REGIME_ALLOCATIONS).T
+        fig_alloc_compare = px.bar(
+            alloc_df,
+            barmode="stack",
+            title="Target Allocations Across Regimes",
+            color_discrete_sequence=px.colors.qualitative.Set3,
+        )
+        fig_alloc_compare.update_layout(
+            xaxis_title="Regime",
+            yaxis_title="Weight",
+            height=500,
+        )
+        st.plotly_chart(fig_alloc_compare, use_container_width=True)
+
+        # Rationale
+        st.subheader("Allocation Rationale")
+        explanation = allocator.get_regime_tilt_explanation(current_regime)
+        st.info(f"**{current_regime}:** {explanation['rationale']}")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown("**Overweight:**")
+            for item in explanation["overweight"]:
+                st.markdown(f"- ✅ {item}")
+        with col2:
+            st.markdown("**Underweight:**")
+            for item in explanation["underweight"]:
+                st.markdown(f"- ⬇️ {item}")
+        with col3:
+            st.markdown("**Key Risks:**")
+            for item in explanation["key_risks"]:
+                st.markdown(f"- ⚠️ {item}")
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # TAB 3: BACKTEST
+    # ═══════════════════════════════════════════════════════════════════════════
+    with tab3:
+        st.header("Strategy Backtest Results")
+
+        # Run backtest
+        engine = BacktestEngine()
+
+        # Prepare regime allocations as dict of Series
+        regime_alloc_series = {
+            name: pd.Series(weights)
+            for name, weights in REGIME_ALLOCATIONS.items()
+        }
+
+        # Align data
+        common_idx = market_returns.index.intersection(regimes.index)
+        if len(common_idx) > 12:
+            result = engine.run(
+                asset_returns=market_returns.loc[common_idx],
+                regime_signals=regimes.loc[common_idx],
+                regime_allocations=regime_alloc_series,
+            )
+
+            # Performance chart
+            fig_perf = go.Figure()
+            fig_perf.add_trace(
+                go.Scatter(
+                    x=result.portfolio_value.index,
+                    y=result.portfolio_value.values,
+                    name="Tactical Strategy",
+                    line=dict(color="#2ecc71", width=2),
+                )
+            )
+            fig_perf.add_trace(
+                go.Scatter(
+                    x=result.benchmark_value.index,
+                    y=result.benchmark_value.values,
+                    name="Benchmark (60/40)",
+                    line=dict(color="#3498db", width=2, dash="dash"),
+                )
+            )
+
+            # Shade regimes
+            for regime_name, color in REGIME_COLORS.items():
+                mask = result.regime_history == regime_name
+                if mask.any():
+                    for date in result.regime_history[mask].index:
+                        fig_perf.add_vrect(
+                            x0=date - pd.DateOffset(days=15),
+                            x1=date + pd.DateOffset(days=15),
+                            fillcolor=color,
+                            opacity=0.1,
+                            layer="below",
+                            line_width=0,
+                        )
+
+            fig_perf.update_layout(
+                title="Cumulative Performance: Tactical vs. 60/40 Benchmark",
+                xaxis_title="Date",
+                yaxis_title="Portfolio Value ($)",
+                height=500,
+                yaxis_tickprefix="$",
+                yaxis_tickformat=",.0f",
+            )
+            st.plotly_chart(fig_perf, use_container_width=True)
+
+            # Metrics table
+            st.subheader("Performance Metrics")
+            metrics_df = pd.DataFrame(
+                list(result.metrics.items()), columns=["Metric", "Value"]
+            )
+            col1, col2 = st.columns(2)
+            with col1:
+                st.dataframe(
+                    metrics_df.iloc[: len(metrics_df) // 2],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            with col2:
+                st.dataframe(
+                    metrics_df.iloc[len(metrics_df) // 2:],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            # Drawdown chart
+            st.subheader("Drawdown Analysis")
+            peak = result.portfolio_value.expanding().max()
+            drawdown = (result.portfolio_value - peak) / peak
+
+            peak_b = result.benchmark_value.expanding().max()
+            drawdown_b = (result.benchmark_value - peak_b) / peak_b
+
+            fig_dd = go.Figure()
+            fig_dd.add_trace(
+                go.Scatter(
+                    x=drawdown.index,
+                    y=drawdown.values,
+                    name="Strategy",
+                    fill="tozeroy",
+                    fillcolor="rgba(46,204,113,0.3)",
+                    line=dict(color="#2ecc71"),
+                )
+            )
+            fig_dd.add_trace(
+                go.Scatter(
+                    x=drawdown_b.index,
+                    y=drawdown_b.values,
+                    name="Benchmark",
+                    fill="tozeroy",
+                    fillcolor="rgba(52,152,219,0.2)",
+                    line=dict(color="#3498db", dash="dash"),
+                )
+            )
+            fig_dd.update_layout(
+                title="Underwater Equity Curve",
+                yaxis_title="Drawdown",
+                yaxis_tickformat=".0%",
+                height=350,
+            )
+            st.plotly_chart(fig_dd, use_container_width=True)
+
+            # Weight evolution
+            st.subheader("Portfolio Weight Evolution")
+            fig_weights = px.area(
+                result.weights_history,
+                title="Asset Allocation Over Time",
+                color_discrete_sequence=px.colors.qualitative.Set3,
+            )
+            fig_weights.update_layout(
+                yaxis_title="Weight",
+                yaxis=dict(range=[0, 1]),
+                height=400,
+            )
+            st.plotly_chart(fig_weights, use_container_width=True)
+
+        else:
+            st.warning("Insufficient overlapping data for backtest. Adjust date range.")
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # TAB 4: TEAR SHEET
+    # ═══════════════════════════════════════════════════════════════════════════
+    with tab4:
+        if 'result' in dir() and result is not None:
+            render_tear_sheet(result)
+        else:
+            st.info("Run backtest in the Backtest tab first to see tear sheet.")
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # TAB 5: STRESS TESTING
+    # ═══════════════════════════════════════════════════════════════════════════
+    with tab5:
+        allocator = TacticalAllocator(risk_aversion=risk_aversion)
+        render_stress_testing_page(
+            regimes, regime_proba, allocator, current_regime, market_returns, detector
+        )
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # TAB 6: MODEL SELECTION
+    # ═══════════════════════════════════════════════════════════════════════════
+    with tab6:
+        render_model_selection_page(macro_features, market_returns, n_regimes, pca_components)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # TAB 7: MODEL DIAGNOSTICS
+    # ═══════════════════════════════════════════════════════════════════════════
+    with tab7:
+        st.header("Model Diagnostics")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("PCA Explained Variance")
+            pca_var = detector.pca.explained_variance_ratio_
+            fig_pca = px.bar(
+                x=[f"PC{i+1}" for i in range(len(pca_var))],
+                y=pca_var,
+                title="PCA Component Variance Explained",
+                labels={"x": "Component", "y": "Variance Ratio"},
+            )
+            fig_pca.add_trace(
+                go.Scatter(
+                    x=[f"PC{i+1}" for i in range(len(pca_var))],
+                    y=np.cumsum(pca_var),
+                    name="Cumulative",
+                    yaxis="y2",
+                )
+            )
+            fig_pca.update_layout(
+                yaxis2=dict(
+                    title="Cumulative",
+                    overlaying="y",
+                    side="right",
+                    range=[0, 1],
+                ),
+            )
+            st.plotly_chart(fig_pca, use_container_width=True)
+
+        with col2:
+            st.subheader("Regime Statistics")
+            regime_counts = regimes.value_counts()
+            fig_counts = px.bar(
+                x=regime_counts.index,
+                y=regime_counts.values,
+                color=regime_counts.index,
+                color_discrete_map=REGIME_COLORS,
+                title="Months in Each Regime",
+                labels={"x": "Regime", "y": "Count (months)"},
+            )
+            st.plotly_chart(fig_counts, use_container_width=True)
+
+        # Model convergence info
+        st.subheader("HMM Fit Information")
+        st.json({
+            "Converged": detector.hmm.monitor_.converged,
+            "Iterations": detector.hmm.monitor_.iter,
+            "N Regimes": n_regimes,
+            "N PCA Components": pca_components,
+            "Total Variance Explained": f"{sum(pca_var):.2%}",
+        })
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # TAB 8: LEADING INDICATORS
+    # ═══════════════════════════════════════════════════════════════════════════
+    with tab8:
+        st.header("Leading Indicator Dashboard")
+        st.markdown(
+            "Key economic indicators used for regime detection. "
+            "Highlighted values indicate stress/opportunity."
+        )
+
+        # Display latest macro data
+        if hasattr(detector, 'scaler') and macro_features is not None:
+            latest = macro_features.tail(1).T
+            latest.columns = ["Latest Z-Score"]
+            latest["Signal"] = latest["Latest Z-Score"].apply(
+                lambda x: "🟢 Normal" if abs(x) < 1
+                else ("🟡 Elevated" if abs(x) < 2 else "🔴 Extreme")
+            )
+            latest = latest.sort_values("Latest Z-Score", ascending=False)
+            st.dataframe(latest, use_container_width=True, height=600)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # PDF EXPORT (Sidebar Button)
+    # ═══════════════════════════════════════════════════════════════════════════
+    if export_pdf:
+        with st.spinner("Generating PDF report..."):
+            allocator_pdf = TacticalAllocator(risk_aversion=risk_aversion)
+            confidence_pdf = regime_proba.iloc[-1].max()
+            alloc_pdf = allocator_pdf.get_target_allocation(current_regime, confidence_pdf)
+
+            # Get backtest metrics if available
+            try:
+                bt_metrics = result.metrics if 'result' in dir() else {}
+            except NameError:
+                bt_metrics = {}
+
+            pdf_gen = PDFReportGenerator()
+            output_path = os.path.join(
+                os.path.dirname(__file__), "..", "reports", "investment_memo.pdf"
+            )
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+            pdf_gen.generate_report(
+                current_regime=current_regime,
+                regime_confidence=confidence_pdf,
+                allocation=alloc_pdf,
+                backtest_metrics=bt_metrics,
+                regime_history=regimes,
+                output_path=output_path,
+            )
+
+            with open(output_path, "rb") as f:
+                st.sidebar.download_button(
+                    "⬇️ Download PDF",
+                    data=f.read(),
+                    file_name="macro_regime_investment_memo.pdf",
+                    mime="application/pdf",
+                )
+            st.sidebar.success("✅ Report generated!")
+
+except FileNotFoundError:
+    st.error(
+        "⚠️ No cached data found. Please set your FRED API key in "
+        "`config/settings.py` and select 'Live (FRED API)' as data source."
+    )
+    st.info(
+        "To get started:\n"
+        "1. Get a free API key at https://fred.stlouisfed.org/docs/api/api_key.html\n"
+        "2. Set `FRED_API_KEY` in `config/settings.py`\n"
+        "3. Select 'Live (FRED API)' in the sidebar"
+    )
+except Exception as e:
+    st.error(f"Error: {e}")
+    st.exception(e)
