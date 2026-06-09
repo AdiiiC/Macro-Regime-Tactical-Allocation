@@ -9,6 +9,7 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
+from datetime import datetime
 import sys
 import os
 
@@ -29,22 +30,37 @@ from backtesting.engine import BacktestEngine, BacktestResult
 from dashboard.pages.stress_testing import render_stress_testing_page
 from dashboard.pages.tear_sheet import render_tear_sheet
 from dashboard.pages.model_selection import render_model_selection_page
+from dashboard.components.ui_components import (
+    inject_custom_css,
+    render_header,
+    render_ticker_tape,
+    render_kpi_card,
+    render_kpi_row,
+    render_regime_badge,
+    render_confidence_gauge,
+    render_sidebar_freshness,
+    render_section_header,
+    styled_dataframe,
+)
 from reports.pdf_generator import PDFReportGenerator
 
 # ─── Page Config ────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Macro Regime Tactical Allocation",
-    page_icon="🏦",
+    page_icon="◈",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-st.title("📊 Macro Regime Detection & Tactical Asset Allocation")
-st.markdown("---")
+# ─── Inject Custom Theme ───────────────────────────────────────────────────────
+inject_custom_css()
+render_header()
 
+st.markdown("")  # spacer after header
 
 # ─── Sidebar ───────────────────────────────────────────────────────────────────
-st.sidebar.header("⚙️ Configuration")
+st.sidebar.image("https://img.icons8.com/fluency/48/graph-report.png", width=40)
+st.sidebar.markdown("## ⚙️ Configuration")
 
 data_source = st.sidebar.radio(
     "Data Source",
@@ -57,9 +73,15 @@ pca_components = st.sidebar.slider("PCA Components", 3, 10, 5)
 risk_aversion = st.sidebar.slider("Risk Aversion (λ)", 0.5, 5.0, 2.5, 0.5)
 
 st.sidebar.markdown("---")
-st.sidebar.header("📅 Backtest Period")
+st.sidebar.markdown("## 📅 Backtest Period")
 start_year = st.sidebar.slider("Start Year", 2005, 2024, 2005)
 end_year = st.sidebar.slider("End Year", 2010, 2026, 2026)
+
+st.sidebar.markdown("---")
+render_sidebar_freshness(
+    last_updated=datetime.now().strftime("%b %d, %Y %H:%M"),
+    model_status="Active",
+)
 
 st.sidebar.markdown("---")
 st.sidebar.header("📄 Export")
@@ -106,6 +128,42 @@ try:
     regimes = detector.predict(macro_features)
     regime_proba = detector.predict_proba(macro_features)
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # TICKER TAPE (above tabs)
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Current regime
+    current_regime = regimes.iloc[-1]
+    current_proba = regime_proba.iloc[-1]
+    confidence = current_proba.max()
+    duration = detector.get_expected_duration()
+
+    # ─── Sidebar: Confidence Gauge ─────────────────────────────────────────
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown("## 🎯 Current Signal")
+        render_confidence_gauge(confidence)
+        st.markdown(
+            f"<p style='text-align:center; color:#6b7d93; font-size:0.8rem;'>"
+            f"Regime: <b style='color:#c9a227'>{current_regime}</b></p>",
+            unsafe_allow_html=True,
+        )
+
+    # Build ticker tape from latest macro features
+    ticker_data = {}
+    if macro_features is not None and len(macro_features) > 1:
+        latest = macro_features.iloc[-1]
+        prev = macro_features.iloc[-2]
+        for col in list(macro_features.columns)[:8]:
+            short_name = col.replace("_Level", "").replace("_YoY", "").replace("_Chg3", "")[:12]
+            ticker_data[short_name] = {
+                "value": latest[col],
+                "change": latest[col] - prev[col],
+                "unit": "",
+            }
+
+    if ticker_data:
+        render_ticker_tape(ticker_data)
+
     # ─── Tab Layout ────────────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "🔍 Regime Detection",
@@ -122,53 +180,95 @@ try:
     # TAB 1: REGIME DETECTION
     # ═══════════════════════════════════════════════════════════════════════════
     with tab1:
-        st.header("Macro Regime Timeline")
+        render_section_header("Macro Regime Detection", "🔍")
 
-        # Current regime
-        current_regime = regimes.iloc[-1]
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Current Regime", current_regime)
-        with col2:
-            duration = detector.get_expected_duration()
-            st.metric(
+        # Regime badge
+        render_regime_badge(current_regime, confidence)
+        st.markdown("")
+
+        # KPI Cards Row
+        regime_sparkline = [
+            1 if r == "Expansion" else (0.7 if r == "Recovery" else (0.3 if r == "Slowdown" else 0.1))
+            for r in regimes.tail(24).values
+        ]
+        confidence_history = regime_proba.tail(24).max(axis=1).tolist()
+
+        cards = [
+            render_kpi_card(
+                "Current Regime", current_regime,
+                regime_class=current_regime,
+                sparkline_data=regime_sparkline,
+            ),
+            render_kpi_card(
                 "Expected Duration",
-                f"{duration.get(current_regime, 0):.1f} months",
-            )
-        with col3:
-            current_proba = regime_proba.iloc[-1]
-            confidence = current_proba.max()
-            st.metric("Model Confidence", f"{confidence:.1%}")
+                f"{duration.get(current_regime, 0):.0f} mo",
+                delta="persistent" if duration.get(current_regime, 0) > 12 else "transitional",
+                delta_positive=duration.get(current_regime, 0) > 12,
+            ),
+            render_kpi_card(
+                "Model Confidence",
+                f"{confidence:.0%}",
+                delta=f"{(confidence - regime_proba.iloc[-2].max()):.1%} vs last",
+                delta_positive=confidence >= regime_proba.iloc[-2].max(),
+                sparkline_data=confidence_history,
+            ),
+            render_kpi_card(
+                "Regimes Detected",
+                str(regimes.nunique()),
+                delta=f"{len(regimes)} months analyzed",
+                delta_positive=True,
+            ),
+        ]
+        render_kpi_row(cards)
 
         st.markdown("---")
 
-        # Regime timeline chart
+        # ─── Animated Regime Timeline ─────────────────────────────────────────
+        # Build animated scatter showing regime evolution
+        regime_numeric = regimes.map({
+            "Expansion": 4, "Recovery": 3, "Slowdown": 2, "Recession": 1
+        }).fillna(0)
+
         fig_timeline = go.Figure()
 
-        # Add colored background for regimes
+        # Colored bars for each regime
         for regime_name, color in REGIME_COLORS.items():
             mask = regimes == regime_name
             if mask.any():
-                regime_dates = regimes[mask].index
-                for date in regime_dates:
-                    fig_timeline.add_vrect(
-                        x0=date - pd.DateOffset(days=15),
-                        x1=date + pd.DateOffset(days=15),
-                        fillcolor=color,
-                        opacity=0.3,
-                        layer="below",
-                        line_width=0,
-                    )
+                fig_timeline.add_trace(go.Scatter(
+                    x=regimes[mask].index,
+                    y=regime_numeric[mask],
+                    mode="markers",
+                    marker=dict(
+                        color=color, size=10, symbol="square",
+                        line=dict(width=0),
+                    ),
+                    name=regime_name,
+                    hovertemplate="%{x|%Y-%m}<br>Regime: " + regime_name + "<extra></extra>",
+                ))
 
         fig_timeline.update_layout(
-            title="Economic Regime Classification Over Time",
-            xaxis_title="Date",
-            yaxis_title="Regime",
-            height=300,
+            title=dict(text="<b>Economic Regime Timeline</b>", font=dict(size=16)),
+            xaxis_title="",
+            yaxis=dict(
+                tickvals=[1, 2, 3, 4],
+                ticktext=["Recession", "Slowdown", "Recovery", "Expansion"],
+                gridcolor="rgba(42,58,78,0.5)",
+            ),
+            height=280,
             showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#e8e8e8"),
+            xaxis=dict(gridcolor="rgba(42,58,78,0.3)"),
+            # Add range slider for animation-like interaction
+            xaxis_rangeslider_visible=True,
+            xaxis_rangeslider_thickness=0.05,
         )
+        st.plotly_chart(fig_timeline, use_container_width=True)
 
-        # Add regime probability stacked area
+        # ─── Regime Probability Stacked Area ──────────────────────────────────
         fig_proba = go.Figure()
         for col in regime_proba.columns:
             fig_proba.add_trace(
@@ -178,26 +278,38 @@ try:
                     name=col,
                     stackgroup="one",
                     fillcolor=REGIME_COLORS.get(col, "#999999"),
-                    line=dict(width=0.5),
+                    line=dict(width=0.5, color=REGIME_COLORS.get(col, "#999999")),
+                    hovertemplate="%{x|%Y-%m}<br>" + col + ": %{y:.1%}<extra></extra>",
                 )
             )
         fig_proba.update_layout(
-            title="Regime Probabilities Over Time",
-            xaxis_title="Date",
+            title=dict(text="<b>Regime Probabilities Over Time</b>", font=dict(size=16)),
+            xaxis_title="",
             yaxis_title="Probability",
-            height=400,
-            yaxis=dict(range=[0, 1]),
+            height=380,
+            yaxis=dict(range=[0, 1], tickformat=".0%", gridcolor="rgba(42,58,78,0.5)"),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#e8e8e8"),
+            xaxis=dict(gridcolor="rgba(42,58,78,0.3)"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
         )
         st.plotly_chart(fig_proba, use_container_width=True)
 
         # Transition matrix
-        st.subheader("Regime Transition Matrix")
+        render_section_header("Transition Dynamics", "🔄")
         trans_matrix = detector.get_transition_matrix()
         fig_trans = px.imshow(
             trans_matrix,
             text_auto=".2f",
-            color_continuous_scale="Blues",
-            title="Monthly Transition Probabilities",
+            color_continuous_scale=[[0, "#0d1b2a"], [0.5, "#1a3a5c"], [1, "#c9a227"]],
+            title="<b>Monthly Transition Probabilities</b>",
+        )
+        fig_trans.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#e8e8e8"),
+            height=350,
         )
         st.plotly_chart(fig_trans, use_container_width=True)
 
@@ -225,9 +337,40 @@ try:
     # TAB 2: ALLOCATION
     # ═══════════════════════════════════════════════════════════════════════════
     with tab2:
-        st.header("Tactical Asset Allocation")
+        render_section_header("Tactical Asset Allocation", "📈")
 
         allocator = TacticalAllocator(risk_aversion=risk_aversion)
+
+        # ─── What-If Panel ────────────────────────────────────────────────────
+        with st.expander("⚡ What-If Scenario — Override Regime Manually", expanded=False):
+            whatif_col1, whatif_col2 = st.columns([1, 2])
+            with whatif_col1:
+                override_regime = st.selectbox(
+                    "Simulate regime:",
+                    ["(Use detected)", "Expansion", "Slowdown", "Recession", "Recovery"],
+                )
+                override_confidence = st.slider("Override confidence:", 0.0, 1.0, confidence)
+
+            active_regime = current_regime if override_regime == "(Use detected)" else override_regime
+            active_confidence = override_confidence if override_regime != "(Use detected)" else confidence
+
+            with whatif_col2:
+                whatif_alloc = allocator.get_target_allocation(active_regime, active_confidence)
+                fig_whatif = px.bar(
+                    x=whatif_alloc.index, y=whatif_alloc.values,
+                    color=whatif_alloc.values,
+                    color_continuous_scale=[[0, "#1a3a5c"], [1, "#c9a227"]],
+                    title=f"<b>Allocation if {active_regime} @ {active_confidence:.0%} confidence</b>",
+                )
+                fig_whatif.update_layout(
+                    yaxis_tickformat=".0%", yaxis_title="Weight",
+                    xaxis_title="", showlegend=False,
+                    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#e8e8e8"), height=280,
+                )
+                st.plotly_chart(fig_whatif, use_container_width=True)
+
+        st.markdown("---")
 
         col1, col2 = st.columns(2)
 
@@ -240,6 +383,12 @@ try:
                 values=current_alloc.values,
                 names=current_alloc.index,
                 title=f"Target Weights — {current_regime} Regime",
+                color_discrete_sequence=px.colors.qualitative.Set3,
+                hole=0.4,
+            )
+            fig_alloc.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e8e8e8"),
             )
             st.plotly_chart(fig_alloc, use_container_width=True)
 
@@ -251,6 +400,12 @@ try:
                 values=bench.values,
                 names=bench.index,
                 title="Benchmark — 60/40 Portfolio",
+                color_discrete_sequence=px.colors.qualitative.Pastel,
+                hole=0.4,
+            )
+            fig_bench.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e8e8e8"),
             )
             st.plotly_chart(fig_bench, use_container_width=True)
 
@@ -267,6 +422,8 @@ try:
             xaxis_title="Regime",
             yaxis_title="Weight",
             height=500,
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#e8e8e8"),
         )
         st.plotly_chart(fig_alloc_compare, use_container_width=True)
 
@@ -292,7 +449,7 @@ try:
     # TAB 3: BACKTEST
     # ═══════════════════════════════════════════════════════════════════════════
     with tab3:
-        st.header("Strategy Backtest Results")
+        render_section_header("Strategy Backtest Results", "📊")
 
         # Run backtest
         engine = BacktestEngine()
@@ -352,6 +509,8 @@ try:
                 height=500,
                 yaxis_tickprefix="$",
                 yaxis_tickformat=",.0f",
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e8e8e8"),
             )
             st.plotly_chart(fig_perf, use_container_width=True)
 
@@ -408,6 +567,8 @@ try:
                 yaxis_title="Drawdown",
                 yaxis_tickformat=".0%",
                 height=350,
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e8e8e8"),
             )
             st.plotly_chart(fig_dd, use_container_width=True)
 
@@ -422,6 +583,8 @@ try:
                 yaxis_title="Weight",
                 yaxis=dict(range=[0, 1]),
                 height=400,
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e8e8e8"),
             )
             st.plotly_chart(fig_weights, use_container_width=True)
 
@@ -456,7 +619,7 @@ try:
     # TAB 7: MODEL DIAGNOSTICS
     # ═══════════════════════════════════════════════════════════════════════════
     with tab7:
-        st.header("Model Diagnostics")
+        render_section_header("Model Diagnostics", "🔬")
 
         col1, col2 = st.columns(2)
 
@@ -484,6 +647,8 @@ try:
                     side="right",
                     range=[0, 1],
                 ),
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e8e8e8"),
             )
             st.plotly_chart(fig_pca, use_container_width=True)
 
@@ -514,7 +679,7 @@ try:
     # TAB 8: LEADING INDICATORS
     # ═══════════════════════════════════════════════════════════════════════════
     with tab8:
-        st.header("Leading Indicator Dashboard")
+        render_section_header("Leading Indicator Dashboard", "📡")
         st.markdown(
             "Key economic indicators used for regime detection. "
             "Highlighted values indicate stress/opportunity."
@@ -529,7 +694,7 @@ try:
                 else ("🟡 Elevated" if abs(x) < 2 else "🔴 Extreme")
             )
             latest = latest.sort_values("Latest Z-Score", ascending=False)
-            st.dataframe(latest, use_container_width=True, height=600)
+            styled_dataframe(latest, height=600)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # PDF EXPORT (Sidebar Button)

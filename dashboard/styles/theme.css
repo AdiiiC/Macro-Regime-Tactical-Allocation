@@ -1,0 +1,392 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   MACRO REGIME TACTICAL ALLOCATION — Custom Dashboard Theme
+   Navy/Gold finance-style dark theme
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Global ──────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+.stApp {
+    font-family: 'Inter', sans-serif;
+}
+
+/* ─── Header Bar ──────────────────────────────────────────────────────────── */
+.header-bar {
+    background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%);
+    border-bottom: 2px solid #c9a227;
+    padding: 1rem 2rem;
+    margin: -1rem -1rem 1.5rem -1rem;
+    border-radius: 0 0 12px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.header-bar h1 {
+    color: #ffffff;
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.5px;
+}
+
+.header-bar .subtitle {
+    color: #c9a227;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+}
+
+/* ─── Ticker Tape ─────────────────────────────────────────────────────────── */
+.ticker-tape {
+    background: linear-gradient(90deg, #0d1b2a, #162032, #0d1b2a);
+    border: 1px solid #2a3a4e;
+    border-radius: 8px;
+    padding: 0.6rem 1.2rem;
+    margin-bottom: 1.2rem;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.ticker-item {
+    display: inline-block;
+    margin-right: 2.5rem;
+    font-size: 0.82rem;
+    color: #a8b4c4;
+}
+
+.ticker-item .label {
+    color: #6b7d93;
+    margin-right: 0.4rem;
+}
+
+.ticker-item .value {
+    font-weight: 600;
+    color: #e8e8e8;
+}
+
+.ticker-item .up {
+    color: #2ecc71;
+}
+
+.ticker-item .down {
+    color: #e74c3c;
+}
+
+/* ─── KPI Cards ───────────────────────────────────────────────────────────── */
+.kpi-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.kpi-card {
+    background: linear-gradient(145deg, #1a2332 0%, #1e2940 100%);
+    border: 1px solid #2a3a4e;
+    border-radius: 12px;
+    padding: 1.2rem 1.4rem;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    border-color: #c9a227;
+}
+
+.kpi-card .kpi-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #6b7d93;
+    margin-bottom: 0.4rem;
+    font-weight: 500;
+}
+
+.kpi-card .kpi-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 0.3rem;
+}
+
+.kpi-card .kpi-delta {
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
+.kpi-card .kpi-delta.positive {
+    color: #2ecc71;
+}
+
+.kpi-card .kpi-delta.negative {
+    color: #e74c3c;
+}
+
+.kpi-card .kpi-sparkline {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    opacity: 0.3;
+    width: 60%;
+    height: 40px;
+}
+
+.kpi-card.regime-expansion {
+    border-left: 4px solid #2ecc71;
+}
+
+.kpi-card.regime-slowdown {
+    border-left: 4px solid #f39c12;
+}
+
+.kpi-card.regime-recession {
+    border-left: 4px solid #e74c3c;
+}
+
+.kpi-card.regime-recovery {
+    border-left: 4px solid #3498db;
+}
+
+/* ─── Regime Badge ────────────────────────────────────────────────────────── */
+.regime-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1.2rem;
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    letter-spacing: 0.5px;
+}
+
+.regime-badge.expansion {
+    background: rgba(46, 204, 113, 0.15);
+    color: #2ecc71;
+    border: 1px solid rgba(46, 204, 113, 0.3);
+}
+
+.regime-badge.slowdown {
+    background: rgba(243, 156, 18, 0.15);
+    color: #f39c12;
+    border: 1px solid rgba(243, 156, 18, 0.3);
+}
+
+.regime-badge.recession {
+    background: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
+    border: 1px solid rgba(231, 76, 60, 0.3);
+}
+
+.regime-badge.recovery {
+    background: rgba(52, 152, 219, 0.15);
+    color: #3498db;
+    border: 1px solid rgba(52, 152, 219, 0.3);
+}
+
+/* ─── Confidence Gauge ────────────────────────────────────────────────────── */
+.confidence-gauge {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+}
+
+.confidence-gauge .gauge-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.confidence-gauge .gauge-label {
+    font-size: 0.65rem;
+    color: #6b7d93;
+    text-align: center;
+}
+
+/* ─── Sidebar Enhancements ────────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0d1b2a 0%, #162032 100%);
+    border-right: 1px solid #2a3a4e;
+}
+
+[data-testid="stSidebar"] .stMarkdown h2 {
+    color: #c9a227;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    border-bottom: 1px solid #2a3a4e;
+    padding-bottom: 0.5rem;
+}
+
+.sidebar-freshness {
+    background: #1a2332;
+    border: 1px solid #2a3a4e;
+    border-radius: 8px;
+    padding: 0.8rem;
+    margin-bottom: 1rem;
+    font-size: 0.78rem;
+}
+
+.sidebar-freshness .label {
+    color: #6b7d93;
+    display: block;
+    margin-bottom: 0.3rem;
+}
+
+.sidebar-freshness .value {
+    color: #2ecc71;
+    font-weight: 600;
+}
+
+/* ─── Section Headers ─────────────────────────────────────────────────────── */
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin: 2rem 0 1rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #2a3a4e;
+}
+
+.section-header h2 {
+    color: #ffffff;
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.section-header .accent {
+    color: #c9a227;
+}
+
+/* ─── Table Enhancements ──────────────────────────────────────────────────── */
+.styled-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 0.85rem;
+}
+
+.styled-table thead {
+    background: linear-gradient(135deg, #1a2332, #1e2940);
+}
+
+.styled-table th {
+    color: #c9a227;
+    padding: 0.8rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 1px;
+    border-bottom: 2px solid #2a3a4e;
+}
+
+.styled-table td {
+    padding: 0.7rem 1rem;
+    color: #e8e8e8;
+    border-bottom: 1px solid #1a2332;
+}
+
+.styled-table tbody tr:hover {
+    background: rgba(201, 162, 39, 0.05);
+}
+
+/* ─── What-If Panel ───────────────────────────────────────────────────────── */
+.whatif-panel {
+    background: linear-gradient(145deg, #1a2332 0%, #1e2940 100%);
+    border: 1px solid #c9a227;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+}
+
+.whatif-panel h3 {
+    color: #c9a227;
+    font-size: 1rem;
+    margin: 0 0 1rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* ─── Plotly Chart Container ──────────────────────────────────────────────── */
+.chart-container {
+    background: #1a2332;
+    border: 1px solid #2a3a4e;
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+/* ─── Tabs Enhancement ────────────────────────────────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0.5rem;
+    background: #0d1b2a;
+    padding: 0.5rem;
+    border-radius: 10px;
+    border: 1px solid #2a3a4e;
+}
+
+.stTabs [data-baseweb="tab"] {
+    border-radius: 8px;
+    padding: 0.6rem 1.2rem;
+    font-weight: 500;
+    font-size: 0.82rem;
+}
+
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(135deg, #c9a227, #d4a82a) !important;
+    color: #0d1b2a !important;
+    font-weight: 700;
+}
+
+/* ─── Download Button ─────────────────────────────────────────────────────── */
+.stDownloadButton button {
+    background: linear-gradient(135deg, #c9a227, #d4a82a);
+    color: #0d1b2a;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem 1.5rem;
+}
+
+.stDownloadButton button:hover {
+    background: linear-gradient(135deg, #d4a82a, #e0b83a);
+    transform: translateY(-1px);
+}
+
+/* ─── Animations ──────────────────────────────────────────────────────────── */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-in {
+    animation: fadeInUp 0.4s ease-out;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.pulse {
+    animation: pulse 2s infinite;
+}
