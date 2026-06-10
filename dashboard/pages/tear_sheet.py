@@ -146,7 +146,7 @@ def render_tear_sheet(result):
             )
 
     fig.update_layout(height=1400, showlegend=True, title_text="Strategy Tear Sheet")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     # ─── Monthly Returns Table ────────────────────────────────────────
     st.subheader("Monthly Returns Table")
@@ -165,7 +165,7 @@ def render_tear_sheet(result):
         pivot.style.format("{:.2%}").background_gradient(
             cmap="RdYlGn", vmin=-0.05, vmax=0.05
         ),
-        use_container_width=True,
+        width="stretch",
     )
 
     # ─── Risk Decomposition ───────────────────────────────────────────
@@ -189,4 +189,4 @@ def render_tear_sheet(result):
     if drawdowns:
         dd_df = pd.DataFrame(drawdowns).sort_values("Max Drawdown").head(5)
         dd_df["Max Drawdown"] = dd_df["Max Drawdown"].apply(lambda x: f"{x:.2%}")
-        st.dataframe(dd_df, use_container_width=True, hide_index=True)
+        st.dataframe(dd_df, width="stretch", hide_index=True)

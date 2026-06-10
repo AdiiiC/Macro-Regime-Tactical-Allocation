@@ -138,7 +138,7 @@ BENCHMARK_ALLOCATION = {
 # ─── HMM Settings ──────────────────────────────────────────────────────────────
 HMM_N_REGIMES = 4
 HMM_COVARIANCE_TYPE = "full"
-HMM_N_ITER = 200
+HMM_N_ITER = 500
 HMM_RANDOM_STATE = 42
 
 # ─── Backtest Settings ─────────────────────────────────────────────────────────

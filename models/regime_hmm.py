@@ -71,6 +71,7 @@ class RegimeDetector:
             n_components=self.n_regimes,
             covariance_type=self.covariance_type,
             n_iter=self.n_iter,
+            tol=0.01,
             random_state=self.random_state,
         )
         self.hmm.fit(X_pca)

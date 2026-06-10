@@ -179,4 +179,4 @@ def styled_dataframe(df: pd.DataFrame, highlight_cols: Optional[List[str]] = Non
                     subset=[col], cmap="RdYlGn", vmin=-0.1, vmax=0.1
                 )
 
-    st.dataframe(styler, use_container_width=True, height=height)
+    st.dataframe(styler, width="stretch", height=height)

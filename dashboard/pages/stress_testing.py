@@ -97,7 +97,7 @@ def render_stress_testing_page(
         xaxis_tickformat=".0%",
         height=400,
     )
-    st.plotly_chart(fig_dist, use_container_width=True)
+    st.plotly_chart(fig_dist, width="stretch")
 
     # ─── Deterministic Stress Scenarios ────────────────────────────────
     st.subheader("Deterministic Stress Scenarios")
@@ -122,14 +122,14 @@ def render_stress_testing_page(
         showlegend=False,
         height=400,
     )
-    st.plotly_chart(fig_scenarios, use_container_width=True)
+    st.plotly_chart(fig_scenarios, width="stretch")
 
     # Details table
     st.dataframe(
         scenario_results["Portfolio Impact"].to_frame().style.format("{:.2%}").background_gradient(
             cmap="RdYlGn", vmin=-0.4, vmax=0.1
         ),
-        use_container_width=True,
+        width="stretch",
     )
 
     return var_results

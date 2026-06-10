@@ -65,7 +65,7 @@ def render_model_selection_page(macro_features, market_returns, n_regimes, pca_c
                 yaxis2=dict(title="AIC", overlaying="y", side="right"),
                 height=400,
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
             # Persistence plot
             fig_persist = px.bar(
@@ -73,7 +73,7 @@ def render_model_selection_page(macro_features, market_returns, n_regimes, pca_c
                 title="Average Regime Persistence (Self-Transition Probability)",
                 labels={"avg_persistence": "Avg P(stay)", "n_regimes": "N Regimes"},
             )
-            st.plotly_chart(fig_persist, use_container_width=True)
+            st.plotly_chart(fig_persist, width="stretch")
 
             # Results table
             st.dataframe(
@@ -83,7 +83,7 @@ def render_model_selection_page(macro_features, market_returns, n_regimes, pca_c
                     "AIC": "{:.0f}",
                     "avg_persistence": "{:.3f}",
                 }),
-                use_container_width=True,
+                width="stretch",
             )
 
     # ─── Model Comparison ─────────────────────────────────────────────
@@ -139,7 +139,7 @@ def render_model_selection_page(macro_features, market_returns, n_regimes, pca_c
                     )
 
             fig_comp.update_layout(height=400)
-            st.plotly_chart(fig_comp, use_container_width=True)
+            st.plotly_chart(fig_comp, width="stretch")
 
             # Agreement rate
             common = hmm_regimes.index.intersection(kmeans_regimes.index)
@@ -173,7 +173,7 @@ def render_model_selection_page(macro_features, market_returns, n_regimes, pca_c
             st.metric("All Folds Converged", str(cv_results['all_folds_converged']))
 
             # Fold details
-            st.dataframe(cv_results["fold_details"], use_container_width=True)
+            st.dataframe(cv_results["fold_details"], width="stretch")
 
 
 # Need this import for subplot

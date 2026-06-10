@@ -332,7 +332,7 @@ try:
             xaxis_rangeslider_visible=True,
             xaxis_rangeslider_thickness=0.05,
         )
-        st.plotly_chart(fig_timeline, use_container_width=True)
+        st.plotly_chart(fig_timeline, width="stretch")
 
         # ─── Regime Probability Stacked Area ──────────────────────────────────
         fig_proba = go.Figure()
@@ -360,7 +360,7 @@ try:
             xaxis=dict(gridcolor="rgba(42,58,78,0.3)"),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
         )
-        st.plotly_chart(fig_proba, use_container_width=True)
+        st.plotly_chart(fig_proba, width="stretch")
 
         # Transition matrix
         render_section_header("Transition Dynamics", "🔄")
@@ -377,7 +377,7 @@ try:
             font=dict(color="#e8e8e8"),
             height=350,
         )
-        st.plotly_chart(fig_trans, use_container_width=True)
+        st.plotly_chart(fig_trans, width="stretch")
 
         # Stationary distribution
         col1, col2 = st.columns(2)
@@ -390,13 +390,13 @@ try:
                 color=stat_dist.index,
                 color_discrete_map=REGIME_COLORS,
             )
-            st.plotly_chart(fig_stat, use_container_width=True)
+            st.plotly_chart(fig_stat, width="stretch")
 
         with col2:
             st.subheader("Expected Duration per Regime")
             st.dataframe(
                 duration.to_frame("Months").style.format("{:.1f}"),
-                use_container_width=True,
+                width="stretch",
             )
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -434,7 +434,7 @@ try:
                     plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                     font=dict(color="#e8e8e8"), height=280,
                 )
-                st.plotly_chart(fig_whatif, use_container_width=True)
+                st.plotly_chart(fig_whatif, width="stretch")
 
         st.markdown("---")
 
@@ -456,7 +456,7 @@ try:
                 plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                 font=dict(color="#e8e8e8"),
             )
-            st.plotly_chart(fig_alloc, use_container_width=True)
+            st.plotly_chart(fig_alloc, width="stretch")
 
         with col2:
             bench_label = "Benchmark" if is_india else "Benchmark (60/40)"
@@ -474,7 +474,7 @@ try:
                 plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                 font=dict(color="#e8e8e8"),
             )
-            st.plotly_chart(fig_bench, use_container_width=True)
+            st.plotly_chart(fig_bench, width="stretch")
 
         # Regime allocation comparison
         st.subheader("Allocation by Regime")
@@ -492,7 +492,7 @@ try:
             plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#e8e8e8"),
         )
-        st.plotly_chart(fig_alloc_compare, use_container_width=True)
+        st.plotly_chart(fig_alloc_compare, width="stretch")
 
         # Rationale
         st.subheader("Allocation Rationale")
@@ -583,7 +583,7 @@ try:
                 plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                 font=dict(color="#e8e8e8"),
             )
-            st.plotly_chart(fig_perf, use_container_width=True)
+            st.plotly_chart(fig_perf, width="stretch")
 
             # Metrics table
             st.subheader("Performance Metrics")
@@ -594,13 +594,13 @@ try:
             with col1:
                 st.dataframe(
                     metrics_df.iloc[: len(metrics_df) // 2],
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                 )
             with col2:
                 st.dataframe(
                     metrics_df.iloc[len(metrics_df) // 2:],
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                 )
 
@@ -641,7 +641,7 @@ try:
                 plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                 font=dict(color="#e8e8e8"),
             )
-            st.plotly_chart(fig_dd, use_container_width=True)
+            st.plotly_chart(fig_dd, width="stretch")
 
             # Weight evolution
             st.subheader("Portfolio Weight Evolution")
@@ -657,7 +657,7 @@ try:
                 plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                 font=dict(color="#e8e8e8"),
             )
-            st.plotly_chart(fig_weights, use_container_width=True)
+            st.plotly_chart(fig_weights, width="stretch")
 
         else:
             st.warning("Insufficient overlapping data for backtest. Adjust date range.")
@@ -730,7 +730,7 @@ try:
                 plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                 font=dict(color="#e8e8e8"),
             )
-            st.plotly_chart(fig_pca, use_container_width=True)
+            st.plotly_chart(fig_pca, width="stretch")
 
         with col2:
             st.subheader("Regime Statistics")
@@ -743,7 +743,7 @@ try:
                 title="Months in Each Regime",
                 labels={"x": "Regime", "y": "Count (months)"},
             )
-            st.plotly_chart(fig_counts, use_container_width=True)
+            st.plotly_chart(fig_counts, width="stretch")
 
         # Model convergence info
         st.subheader("HMM Fit Information")
