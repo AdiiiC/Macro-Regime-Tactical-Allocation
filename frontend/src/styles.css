@@ -1135,3 +1135,56 @@ body {
   border-radius: 1px;
 }
 
+/* ── Backtest benchmark selector ─────────────────────────────────────── */
+.bt-bench {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.bt-bench__label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── Robustness sweep heatmap ────────────────────────────────────────── */
+.sw-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 14px 0 10px;
+}
+.sw-row {
+  display: grid;
+  grid-template-columns: 64px repeat(5, 1fr);
+  gap: 4px;
+  align-items: stretch;
+}
+.sw-row--head .sw-col-head,
+.sw-corner {
+  font-size: 10px;
+  color: var(--ink-3);
+  text-align: center;
+  align-self: center;
+}
+.sw-corner {
+  text-align: left;
+}
+.sw-row-head {
+  font-size: 11px;
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+}
+.sw-cell {
+  font-size: 12px;
+  color: var(--ink);
+  text-align: center;
+  padding: 8px 0;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+}
+
+

@@ -11,6 +11,7 @@ import type {
   MarketKey,
   RegimeHistory,
   RegimeName,
+  SensitivityResult,
   StressResult,
   TransitionMatrix,
   VarResult,
@@ -22,6 +23,7 @@ import Allocation from "./components/Allocation";
 import Risk from "./components/Risk";
 import Stress from "./components/Stress";
 import Backtest from "./components/Backtest";
+import Sensitivity from "./components/Sensitivity";
 import Drivers from "./components/Drivers";
 import ModelComparison from "./components/ModelComparison";
 
@@ -126,6 +128,8 @@ export default function App() {
   const [riskErr, setRiskErr] = useState<string | null>(null);
   const [stress, setStress] = useState<StressResult | null>(null);
   const [stressErr, setStressErr] = useState<string | null>(null);
+  const [sensitivity, setSensitivity] = useState<SensitivityResult | null>(null);
+  const [sensErr, setSensErr] = useState<string | null>(null);
 
   // Theme
   useEffect(() => {
@@ -152,6 +156,8 @@ export default function App() {
       setRiskErr(null);
       setStress(null);
       setStressErr(null);
+      setSensitivity(null);
+      setSensErr(null);
 
       let active = true;
       Promise.all([
@@ -173,6 +179,7 @@ export default function App() {
       api.comparison(m).then(setComparison).catch((e) => setCmpErr(String(e.message ?? e)));
       api.var(m, 12).then(setRisk).catch((e) => setRiskErr(String(e.message ?? e)));
       api.stress(m).then(setStress).catch((e) => setStressErr(String(e.message ?? e)));
+      api.sensitivity(m).then(setSensitivity).catch((e) => setSensErr(String(e.message ?? e)));
 
       return () => {
         active = false;
@@ -324,11 +331,18 @@ export default function App() {
             onSelect={(sel) => writeParams(market, sel)}
           />
           {backtest ? (
-            <Backtest data={backtest} />
+            <Backtest data={backtest} market={market} />
           ) : btErr ? (
             <PanelNote title="Strategy backtest" message={btErr} />
           ) : (
             <PanelSkeleton title="Strategy backtest" rows={5} />
+          )}
+          {sensitivity ? (
+            <Sensitivity data={sensitivity} />
+          ) : sensErr ? (
+            <PanelNote title="Robustness sweep" message={sensErr} />
+          ) : (
+            <PanelSkeleton title="Robustness sweep" rows={4} />
           )}
         </div>
 

@@ -162,8 +162,33 @@ export interface paths {
          * @description Walk-forward backtest of the regime strategy vs the market benchmark.
          *     Returns an equity curve, underwater drawdown, rolling Sharpe, per-regime
          *     P&L attribution and numeric performance metrics.
+         *
+         *     `benchmark` selects the comparison construction: sixty_forty (static),
+         *     equal_weight, or risk_parity (equal risk contribution).
          */
         get: operations["get_backtest_backtest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backtest/sensitivity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Backtest Sensitivity
+         * @description Robustness sweep: how the strategy's net Sharpe and annualized return hold
+         *     up across transaction-cost assumptions and rebalancing cadence. A strategy
+         *     whose edge survives higher costs and slower rebalancing is more credible.
+         */
+        get: operations["get_backtest_sensitivity_backtest_sensitivity_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -598,6 +623,38 @@ export interface operations {
         };
     };
     get_backtest_backtest_get: {
+        parameters: {
+            query?: {
+                market?: string;
+                benchmark?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_backtest_sensitivity_backtest_sensitivity_get: {
         parameters: {
             query?: {
                 market?: string;

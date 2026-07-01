@@ -297,6 +297,48 @@ def _run_backtest(bundle: MarketBundle):
     return result
 
 
+BENCHMARK_VARIANTS = ("sixty_forty", "equal_weight", "risk_parity")
+
+
+def _benchmark_weights(bundle: MarketBundle, variant: str) -> dict:
+    """Resolve a benchmark construction to a weight dict over the market assets."""
+    assets = list(bundle.market_returns.columns)
+
+    if variant == "equal_weight":
+        w = 1.0 / len(assets)
+        return {a: w for a in assets}
+
+    if variant == "risk_parity":
+        from models.risk_budgeting import RiskBudgetAllocator
+
+        cov = bundle.market_returns.cov() * 12.0  # annualized covariance
+        weights = RiskBudgetAllocator().compute_risk_parity_weights(cov)
+        return {k: float(v) for k, v in weights.to_dict().items()}
+
+    # Default: the market's static benchmark (60/40 style).
+    return dict(bundle.benchmark)
+
+
+def _run_backtest_custom(
+    bundle: MarketBundle,
+    benchmark_weights: dict,
+    rebalance_every_n: int = 1,
+):
+    """Fresh (uncached) backtest with explicit benchmark and rebalance cadence."""
+    regimes = bundle.detector.predict(bundle.macro_features)
+    regime_allocs = {
+        name: pd.Series(weights) for name, weights in bundle.regime_allocations.items()
+    }
+    engine = BacktestEngine()
+    return engine.run(
+        asset_returns=bundle.market_returns,
+        regime_signals=regimes,
+        regime_allocations=regime_allocs,
+        benchmark_weights=benchmark_weights,
+        rebalance_every_n=rebalance_every_n,
+    )
+
+
 def _annualized_metrics(pv: pd.Series, bv: pd.Series) -> dict:
     sr = pv.pct_change().dropna()
     br = bv.pct_change().dropna()
@@ -495,15 +537,31 @@ async def get_regime_allocation(regime_name: str, market: str = Query(default="u
 
 
 @app.get("/backtest")
-async def get_backtest(market: str = Query(default="us")):
+async def get_backtest(
+    market: str = Query(default="us"),
+    benchmark: str = Query(default="sixty_forty"),
+):
     """
     Walk-forward backtest of the regime strategy vs the market benchmark.
     Returns an equity curve, underwater drawdown, rolling Sharpe, per-regime
     P&L attribution and numeric performance metrics.
+
+    `benchmark` selects the comparison construction: sixty_forty (static),
+    equal_weight, or risk_parity (equal risk contribution).
     """
     bundle = get_bundle(market)
     require_returns(bundle)
-    result = _run_backtest(bundle)
+
+    if benchmark not in BENCHMARK_VARIANTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid benchmark. Must be one of: {list(BENCHMARK_VARIANTS)}",
+        )
+
+    if benchmark == "sixty_forty":
+        result = _run_backtest(bundle)
+    else:
+        result = _run_backtest_custom(bundle, _benchmark_weights(bundle, benchmark))
 
     pv = result.portfolio_value
     bv = result.benchmark_value.reindex(pv.index).ffill()
@@ -556,6 +614,7 @@ async def get_backtest(market: str = Query(default="us")):
     return {
         "market": bundle.key,
         "currency": bundle.currency,
+        "benchmark": benchmark,
         "start": str(pv.index[0].date()),
         "end": str(pv.index[-1].date()),
         "metrics": _annualized_metrics(pv, bv),
@@ -563,6 +622,54 @@ async def get_backtest(market: str = Query(default="us")):
         "drawdown": drawdown,
         "rolling_sharpe": rolling_sharpe,
         "regime_attribution": attribution,
+    }
+
+
+@app.get("/backtest/sensitivity")
+async def get_backtest_sensitivity(
+    market: str = Query(default="us"),
+):
+    """
+    Robustness sweep: how the strategy's net Sharpe and annualized return hold
+    up across transaction-cost assumptions and rebalancing cadence. A strategy
+    whose edge survives higher costs and slower rebalancing is more credible.
+    """
+    bundle = get_bundle(market)
+    require_returns(bundle)
+
+    cost_grid = [0, 5, 10, 25, 50]          # basis points per unit turnover
+    cadence_grid = [1, 3, 6, 12]            # rebalance every N months
+    benchmark_weights = dict(bundle.benchmark)
+
+    cells = []
+    for n in cadence_grid:
+        for bps in cost_grid:
+            engine = BacktestEngine(transaction_cost_bps=bps)
+            regimes = bundle.detector.predict(bundle.macro_features)
+            regime_allocs = {
+                name: pd.Series(w) for name, w in bundle.regime_allocations.items()
+            }
+            res = engine.run(
+                asset_returns=bundle.market_returns,
+                regime_signals=regimes,
+                regime_allocations=regime_allocs,
+                benchmark_weights=benchmark_weights,
+                rebalance_every_n=n,
+            )
+            m = _annualized_metrics(res.portfolio_value, res.benchmark_value)
+            cells.append({
+                "cost_bps": bps,
+                "rebalance_months": n,
+                "sharpe": _finite0(m["sharpe_strategy"]),
+                "annual_return": _finite0(m["annual_return_strategy"]),
+                "max_drawdown": _finite0(m["max_drawdown_strategy"]),
+            })
+
+    return {
+        "market": bundle.key,
+        "cost_grid": cost_grid,
+        "cadence_grid": cadence_grid,
+        "cells": cells,
     }
 
 

@@ -1,6 +1,7 @@
 import type {
   Allocation,
   BacktestResult,
+  BenchmarkVariant,
   ComparisonResult,
   CurrentRegime,
   DriversResult,
@@ -8,6 +9,7 @@ import type {
   MarketKey,
   MarketsResponse,
   RegimeHistory,
+  SensitivityResult,
   StressResult,
   TransitionMatrix,
   VarResult,
@@ -48,7 +50,10 @@ export const api = {
   allocation: (m: MarketKey) => get<Allocation>(`/allocation/current${q(m)}`),
   allocationFor: (m: MarketKey, regime: string) =>
     get<Allocation>(`/allocation/regime/${regime}${q(m)}`),
-  backtest: (m: MarketKey) => get<BacktestResult>(`/backtest${q(m)}`),
+  backtest: (m: MarketKey, benchmark: BenchmarkVariant = "sixty_forty") =>
+    get<BacktestResult>(`/backtest${q(m, `benchmark=${benchmark}`)}`),
+  sensitivity: (m: MarketKey) =>
+    get<SensitivityResult>(`/backtest/sensitivity${q(m)}`),
   comparison: (m: MarketKey) => get<ComparisonResult>(`/model/comparison${q(m)}`),
   var: (m: MarketKey, horizon: number, simulations = 10000) =>
     get<VarResult>(`/risk/var${q(m, `horizon=${horizon}&simulations=${simulations}`)}`),

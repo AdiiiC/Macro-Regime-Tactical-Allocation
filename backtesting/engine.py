@@ -126,6 +126,7 @@ class BacktestEngine:
         regime_signals: pd.Series,
         regime_allocations: Dict[str, pd.Series],
         benchmark_weights: Optional[Dict] = None,
+        rebalance_every_n: int = 1,
     ) -> BacktestResult:
         """
         Run full backtest simulation.
@@ -135,6 +136,8 @@ class BacktestEngine:
             regime_signals: Regime label for each month
             regime_allocations: Target weights per regime
             benchmark_weights: Static benchmark allocation
+            rebalance_every_n: Rebalance to the regime target only every N months;
+                weights drift with the market in between (1 = monthly rebalancing)
         """
         if benchmark_weights is None:
             benchmark_weights = BENCHMARK_ALLOCATION
@@ -165,15 +168,17 @@ class BacktestEngine:
             period_returns = asset_returns.iloc[i]
 
             # ─── Strategy Portfolio ────────────────────────────────────
-            # Get target allocation for current regime
-            if regime in regime_allocations:
+            # Get target allocation for current regime. Only rebalance on the
+            # scheduled cadence; otherwise hold the drifted weights.
+            rebalance_now = (i % rebalance_every_n == 0)
+            if rebalance_now and regime in regime_allocations:
                 target = regime_allocations[regime]
                 if isinstance(target, dict):
                     target = pd.Series(target)
                 target = target.reindex(assets, fill_value=0.0)
                 target = target / target.sum()
             else:
-                target = current_weights  # hold if unknown
+                target = current_weights  # hold (off-cadence or unknown regime)
 
             # Compute turnover and transaction costs
             turnover = (target - current_weights).abs().sum()

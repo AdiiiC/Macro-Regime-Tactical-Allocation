@@ -1,8 +1,14 @@
-import { useMemo, useState } from "react";
-import type { BacktestResult } from "../types";
-import { REGIME_COLORS, num, pct, signedPct } from "../api";
+import { useEffect, useMemo, useState } from "react";
+import type { BacktestResult, BenchmarkVariant, MarketKey } from "../types";
+import { api, REGIME_COLORS, num, pct, signedPct } from "../api";
 
 type ChartMode = "equity" | "drawdown" | "rolling";
+
+const BENCH_LABEL: Record<BenchmarkVariant, string> = {
+  sixty_forty: "60 / 40",
+  equal_weight: "Equal wt.",
+  risk_parity: "Risk parity",
+};
 
 const W = 720;
 const H = 210;
@@ -31,8 +37,35 @@ function path(vals: (number | null)[], min: number, max: number) {
   return d.trim();
 }
 
-export default function Backtest({ data }: { data: BacktestResult }) {
+export default function Backtest({
+  data: initial,
+  market,
+}: {
+  data: BacktestResult;
+  market: MarketKey;
+}) {
   const [mode, setMode] = useState<ChartMode>("equity");
+  const [data, setData] = useState<BacktestResult>(initial);
+  const [benchmark, setBenchmark] = useState<BenchmarkVariant>(initial.benchmark);
+  const [loading, setLoading] = useState(false);
+
+  // Reset when the parent hands us a fresh backtest (market switch / refresh).
+  useEffect(() => {
+    setData(initial);
+    setBenchmark(initial.benchmark);
+  }, [initial]);
+
+  function chooseBenchmark(v: BenchmarkVariant) {
+    if (v === benchmark) return;
+    setBenchmark(v);
+    setLoading(true);
+    api
+      .backtest(market, v)
+      .then(setData)
+      .catch(() => void 0)
+      .finally(() => setLoading(false));
+  }
+
   const m = data.metrics;
 
   const chart = useMemo(() => {
@@ -121,12 +154,30 @@ export default function Backtest({ data }: { data: BacktestResult }) {
         </span>
       </div>
 
+      <div className="bt-bench">
+        <span className="bt-bench__label ink-3">Benchmark</span>
+        <div className="seg-ctrl">
+          {(
+            ["sixty_forty", "equal_weight", "risk_parity"] as BenchmarkVariant[]
+          ).map((v) => (
+            <button
+              key={v}
+              className={`seg-btn ${benchmark === v ? "is-active" : ""}`}
+              onClick={() => chooseBenchmark(v)}
+              disabled={loading}
+            >
+              {BENCH_LABEL[v]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="bt-metrics">
         <div className="bt-table">
           <div className="bt-table__head">
             <span />
             <span>Strategy</span>
-            <span>60 / 40</span>
+            <span>{BENCH_LABEL[benchmark]}</span>
           </div>
           {rows.map((r) => (
             <div className="bt-table__row" key={r.k}>
@@ -167,7 +218,7 @@ export default function Backtest({ data }: { data: BacktestResult }) {
             <span className="bt-swatch" style={{ background: "var(--gold)" }} /> Strategy
           </span>
           <span className="bt-legend__item">
-            <span className="bt-swatch" style={{ background: "var(--ink-2)" }} /> 60/40
+            <span className="bt-swatch" style={{ background: "var(--ink-2)" }} /> {BENCH_LABEL[benchmark]}
           </span>
         </div>
       </div>
@@ -226,7 +277,7 @@ export default function Backtest({ data }: { data: BacktestResult }) {
 
       <p className="panel__note">
         Event-driven monthly walk-forward, {data.currency}. Regime signals drive tactical
-        weights vs a static 60/40 benchmark, net of 10 bps transaction costs.
+        weights vs the {BENCH_LABEL[benchmark]} benchmark, net of 10 bps transaction costs.
       </p>
     </section>
   );

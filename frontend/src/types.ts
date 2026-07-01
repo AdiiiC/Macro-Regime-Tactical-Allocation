@@ -113,9 +113,12 @@ export interface RegimeAttribution {
   avg_monthly_return: number;
 }
 
+export type BenchmarkVariant = "sixty_forty" | "equal_weight" | "risk_parity";
+
 export interface BacktestResult {
   market: string;
   currency: string;
+  benchmark: BenchmarkVariant;
   start: string;
   end: string;
   metrics: BacktestMetrics;
@@ -123,6 +126,21 @@ export interface BacktestResult {
   drawdown: EquityPoint[];
   rolling_sharpe: RollingSharpePoint[];
   regime_attribution: RegimeAttribution[];
+}
+
+export interface SensitivityCell {
+  cost_bps: number;
+  rebalance_months: number;
+  sharpe: number;
+  annual_return: number;
+  max_drawdown: number;
+}
+
+export interface SensitivityResult {
+  market: string;
+  cost_grid: number[];
+  cadence_grid: number[];
+  cells: SensitivityCell[];
 }
 
 export interface RegimeDriver {
