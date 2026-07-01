@@ -19,3 +19,9 @@ yarn-error.log*
 .DS_Store
 .vscode/
 .idea/
+
+# test artifacts
+test-results/
+playwright-report/
+playwright/.cache/
+coverage/

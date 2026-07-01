@@ -33,3 +33,17 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  frontend:
+    build: ./frontend
+    container_name: macro-regime-frontend
+    ports:
+      - "5180:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
