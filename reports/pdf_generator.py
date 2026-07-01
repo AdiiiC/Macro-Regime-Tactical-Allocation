@@ -54,7 +54,7 @@ class PDFReportGenerator:
             textColor=colors.HexColor("#3949ab"),
         ))
         self.styles.add(ParagraphStyle(
-            name="BodyText",
+            name="MemoBody",
             parent=self.styles["Normal"],
             fontSize=10,
             spaceAfter=6,
@@ -110,7 +110,7 @@ class PDFReportGenerator:
         ))
         elements.append(Paragraph(
             f"Investment Strategy Memo — {datetime.now().strftime('%B %d, %Y')}",
-            self.styles["BodyText"],
+            self.styles["MemoBody"],
         ))
         elements.append(HRFlowable(
             width="100%", thickness=2, color=colors.HexColor("#1a237e"),
@@ -132,7 +132,7 @@ class PDFReportGenerator:
             f'Current Economic Regime: <font color="{regime_color}">'
             f'<b>{current_regime}</b></font> '
             f'(Confidence: {regime_confidence:.1%})',
-            self.styles["BodyText"],
+            self.styles["MemoBody"],
         ))
 
         rationale_map = {
@@ -143,7 +143,7 @@ class PDFReportGenerator:
         }
         elements.append(Paragraph(
             f"<i>{rationale_map.get(current_regime, 'Unknown regime state.')}</i>",
-            self.styles["BodyText"],
+            self.styles["MemoBody"],
         ))
         elements.append(Spacer(1, 15))
 

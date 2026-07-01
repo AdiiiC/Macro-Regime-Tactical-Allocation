@@ -25,12 +25,13 @@ class TacticalAllocator:
         benchmark: Dict = BENCHMARK_ALLOCATION,
         max_deviation: float = 0.15,
         risk_aversion: float = 2.5,
+        assets: list = None,
     ):
         self.regime_allocations = regime_allocations
         self.benchmark = benchmark
         self.max_deviation = max_deviation
         self.risk_aversion = risk_aversion
-        self.assets = list(ASSET_TICKERS.keys())
+        self.assets = assets if assets is not None else list(ASSET_TICKERS.keys())
 
     def get_target_allocation(
         self, regime: str, confidence: float = 1.0

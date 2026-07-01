@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { StressResult } from "../types";
-import { ASSET_LABELS, ASSET_ORDER, signedPct } from "../api";
+import { assetLabel, orderAssets, signedPct } from "../api";
 
 export default function Stress({ data }: { data: StressResult }) {
   const entries = Object.entries(data.scenarios);
@@ -8,6 +8,9 @@ export default function Stress({ data }: { data: StressResult }) {
   const maxAbs = Math.max(
     ...entries.map(([, s]) => Math.abs(s.portfolio_impact)),
     0.05
+  );
+  const shockAssets = orderAssets(
+    Array.from(new Set(entries.flatMap(([, s]) => Object.keys(s.shocks))))
   );
 
   return (
@@ -45,11 +48,11 @@ export default function Stress({ data }: { data: StressResult }) {
 
               {isOpen && (
                 <div className="shocks">
-                  {ASSET_ORDER.map((a) => {
+                  {shockAssets.map((a) => {
                     const v = s.shocks[a] ?? 0;
                     return (
                       <div className="shock" key={a}>
-                        <span className="shock__a">{ASSET_LABELS[a]}</span>
+                        <span className="shock__a">{assetLabel(a)}</span>
                         <span
                           className={`shock__v mono ${
                             v > 0 ? "pos" : v < 0 ? "neg" : "flat"

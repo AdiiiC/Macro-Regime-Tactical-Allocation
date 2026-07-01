@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import type { Allocation as AllocationT, RegimeName } from "../types";
+import type { Allocation as AllocationT, MarketKey, RegimeName } from "../types";
 import {
-  ASSET_LABELS,
-  ASSET_ORDER,
+  assetLabel,
+  orderAssets,
   REGIME_COLORS,
   REGIME_ORDER,
   api,
@@ -10,10 +10,33 @@ import {
   signedPct,
 } from "../api";
 
-export default function Allocation({ live }: { live: AllocationT }) {
-  const [selected, setSelected] = useState<"live" | RegimeName>("live");
+export default function Allocation({
+  live,
+  market,
+  initialSelected,
+  onSelect,
+}: {
+  live: AllocationT;
+  market: MarketKey;
+  initialSelected?: "live" | RegimeName;
+  onSelect?: (sel: "live" | RegimeName) => void;
+}) {
+  const [selected, setSelected] = useState<"live" | RegimeName>(
+    initialSelected ?? "live"
+  );
   const [data, setData] = useState<AllocationT>(live);
   const [loading, setLoading] = useState(false);
+
+  const choose = (sel: "live" | RegimeName) => {
+    setSelected(sel);
+    onSelect?.(sel);
+  };
+
+  // Reset to live whenever the market (and therefore `live`) changes.
+  useEffect(() => {
+    setSelected("live");
+    setData(live);
+  }, [market, live]);
 
   useEffect(() => {
     let active = true;
@@ -23,16 +46,24 @@ export default function Allocation({ live }: { live: AllocationT }) {
     }
     setLoading(true);
     api
-      .allocationFor(selected)
+      .allocationFor(market, selected)
       .then((d) => active && setData(d))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [selected, live]);
+  }, [selected, live, market]);
 
+  const assets = orderAssets(
+    Array.from(
+      new Set([
+        ...Object.keys(data.target_weights),
+        ...Object.keys(data.benchmark_weights),
+      ])
+    )
+  );
   const maxW = Math.max(
-    ...ASSET_ORDER.map((a) => data.target_weights[a] ?? 0),
+    ...assets.map((a) => data.target_weights[a] ?? 0),
     0.35
   );
 
@@ -43,7 +74,7 @@ export default function Allocation({ live }: { live: AllocationT }) {
         <div className="seg-ctrl">
           <button
             className={`seg-btn ${selected === "live" ? "is-active" : ""}`}
-            onClick={() => setSelected("live")}
+            onClick={() => choose("live")}
           >
             Live
           </button>
@@ -51,7 +82,7 @@ export default function Allocation({ live }: { live: AllocationT }) {
             <button
               key={r}
               className={`seg-btn ${selected === r ? "is-active" : ""}`}
-              onClick={() => setSelected(r as RegimeName)}
+              onClick={() => choose(r as RegimeName)}
               style={
                 selected === r
                   ? { color: REGIME_COLORS[r], borderColor: REGIME_COLORS[r] }
@@ -75,13 +106,13 @@ export default function Allocation({ live }: { live: AllocationT }) {
           </span>
         </div>
 
-        {ASSET_ORDER.map((asset) => {
+        {assets.map((asset) => {
           const t = data.target_weights[asset] ?? 0;
           const b = data.benchmark_weights[asset] ?? 0;
           const delta = t - b;
           return (
             <div className="alloc-row" key={asset}>
-              <span className="alloc-row__name">{ASSET_LABELS[asset]}</span>
+              <span className="alloc-row__name">{assetLabel(asset)}</span>
               <div className="alloc-row__bar">
                 <div
                   className="alloc-row__fill"
@@ -114,7 +145,7 @@ export default function Allocation({ live }: { live: AllocationT }) {
           <div className="chips">
             {data.overweight.map((x) => (
               <span className="chip chip--pos" key={x}>
-                {x}
+                {assetLabel(x)}
               </span>
             ))}
           </div>
@@ -124,7 +155,7 @@ export default function Allocation({ live }: { live: AllocationT }) {
           <div className="chips">
             {data.underweight.map((x) => (
               <span className="chip chip--neg" key={x}>
-                {x}
+                {assetLabel(x)}
               </span>
             ))}
           </div>
