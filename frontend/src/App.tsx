@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import type {
   Allocation as AllocationT,
@@ -113,6 +113,8 @@ export default function App() {
     () => (localStorage.getItem(THEME_KEY) as "dark" | "light") ?? "dark"
   );
   const [refreshing, setRefreshing] = useState(false);
+  const [live, setLive] = useState(false);
+  const liveAsOf = useRef<string | null>(null);
 
   const [core, setCore] = useState<Core | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -168,18 +170,22 @@ export default function App() {
         api.allocation(m),
       ])
         .then(([health, regime, history, transition, allocation]) => {
-          if (active)
-            setCore({ health, regime, history, transition, allocation });
+          if (!active) return;
+          setCore({ health, regime, history, transition, allocation });
+
+          // Heavy analytical panels fire only after the core desk has rendered.
+          // Several are expensive on a cold backend (LSTM comparison, 10k-sim
+          // VaR, 20-run sensitivity sweep); firing them alongside the core
+          // fetches would saturate the browser's per-host connection limit and
+          // starve the critical path, leaving the app stuck on "Loading".
+          api.backtest(m).then(setBacktest).catch((e) => setBtErr(String(e.message ?? e)));
+          api.drivers(m).then(setDrivers).catch((e) => setDrvErr(String(e.message ?? e)));
+          api.comparison(m).then(setComparison).catch((e) => setCmpErr(String(e.message ?? e)));
+          api.var(m, 12).then(setRisk).catch((e) => setRiskErr(String(e.message ?? e)));
+          api.stress(m).then(setStress).catch((e) => setStressErr(String(e.message ?? e)));
+          api.sensitivity(m).then(setSensitivity).catch((e) => setSensErr(String(e.message ?? e)));
         })
         .catch((e) => active && setError(String(e.message ?? e)));
-
-      // Lazy analytical panels (independent, non-blocking).
-      api.backtest(m).then(setBacktest).catch((e) => setBtErr(String(e.message ?? e)));
-      api.drivers(m).then(setDrivers).catch((e) => setDrvErr(String(e.message ?? e)));
-      api.comparison(m).then(setComparison).catch((e) => setCmpErr(String(e.message ?? e)));
-      api.var(m, 12).then(setRisk).catch((e) => setRiskErr(String(e.message ?? e)));
-      api.stress(m).then(setStress).catch((e) => setStressErr(String(e.message ?? e)));
-      api.sensitivity(m).then(setSensitivity).catch((e) => setSensErr(String(e.message ?? e)));
 
       return () => {
         active = false;
@@ -208,6 +214,40 @@ export default function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [months]);
+
+  // Live regime channel (SSE). Reflects the persisted state and pushes an
+  // update the moment a refresh lands. Macro data is monthly, so genuine
+  // change events are rare — the connection mostly confirms liveness.
+  //
+  // Opened only after the core desk has loaded: a long-lived SSE stream holds
+  // an HTTP/1.1 connection slot, so connecting it during the initial request
+  // burst would contend with the core fetches (especially through the dev proxy).
+  const coreReady = core !== null;
+  useEffect(() => {
+    if (!coreReady) return;
+    liveAsOf.current = null;
+    const es = new EventSource(api.streamUrl(market));
+    es.addEventListener("open", () => setLive(true));
+    es.addEventListener("regime", (ev) => {
+      setLive(true);
+      try {
+        const snap = JSON.parse((ev as MessageEvent).data) as { as_of: string };
+        // Reload the desk only when the observation date actually advances.
+        if (liveAsOf.current !== null && snap.as_of !== liveAsOf.current) {
+          loadMarket(market);
+        }
+        liveAsOf.current = snap.as_of;
+      } catch {
+        /* ignore malformed frames */
+      }
+    });
+    es.onerror = () => setLive(false);
+    return () => {
+      es.close();
+      setLive(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [market, coreReady]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -314,6 +354,17 @@ export default function App() {
                     month: "short",
                     day: "2-digit",
                   })}
+            </span>
+            <span
+              className={`live-pill ${live ? "is-live" : ""} has-tip`}
+              data-tip={
+                live
+                  ? "Live regime channel connected (SSE). Pushes an update when a refresh lands."
+                  : "Live channel offline — data still loads on demand."
+              }
+            >
+              <span className="live-pill__dot" />
+              {live ? "live" : "off"}
             </span>
           </div>
         </div>

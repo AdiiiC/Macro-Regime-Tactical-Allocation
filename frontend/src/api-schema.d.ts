@@ -134,6 +134,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/stream/regime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Regime
+         * @description Live regime channel (SSE). See ``_regime_event_stream`` for semantics.
+         */
+        get: operations["stream_regime_stream_regime_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/regime/drivers": {
         parameters: {
             query?: never;
@@ -595,6 +615,37 @@ export interface operations {
             query?: {
                 market?: string;
                 limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_regime_stream_regime_get: {
+        parameters: {
+            query?: {
+                market?: string;
             };
             header?: never;
             path?: never;

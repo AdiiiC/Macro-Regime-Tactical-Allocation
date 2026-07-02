@@ -129,6 +129,29 @@ def test_regime_log_persisted(client):
         assert t["to"] != t["from"]
 
 
+def test_stream_regime_unknown_market_is_404(client):
+    r = client.get("/stream/regime?market=nope")
+    assert r.status_code == 404
+
+
+def test_regime_snapshot_shape(client):
+    """The SSE snapshot builder returns a well-formed frame for a loaded market.
+
+    Exercised directly rather than over the wire — the stream itself is an
+    infinite generator that the test client cannot fully drain.
+    """
+    from api.main import _regime_snapshot
+
+    # /regime/log above guarantees 'us' is loaded and backfilled.
+    snap = _regime_snapshot("us")
+    assert snap is not None
+    assert {"market", "regime", "confidence", "as_of", "data_through", "ts"} <= set(
+        snap.keys()
+    )
+    assert snap["market"] == "us"
+    assert snap["regime"] in {"Expansion", "Slowdown", "Recession", "Recovery"}
+
+
 def test_model_comparison_has_primary(client):
     r = client.get("/model/comparison?market=us")
     assert r.status_code == 200

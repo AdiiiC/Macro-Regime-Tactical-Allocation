@@ -7,15 +7,17 @@ model comparison and investment memos for US and India markets.
 import os
 import sys
 import math
+import json
+import asyncio
 import tempfile
 from datetime import datetime
 from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -302,11 +304,14 @@ def _finite0(v) -> float:
 
 @app.on_event("startup")
 async def startup_event():
-    # Eagerly load US so the default experience is instant; India loads on demand.
-    bundle = state.load("us")
-    if bundle is not None:
-        _persist_regime_history(bundle, source="startup")
-        bundle._history_persisted = True
+    # Warm both markets so switching is instant and the persisted regime history
+    # is backfilled up front. Fitting is CPU-bound; doing it once at startup
+    # keeps request handlers from blocking the event loop on first access.
+    for key in MARKET_CONFIG:
+        bundle = state.load(key)
+        if bundle is not None:
+            _persist_regime_history(bundle, source="startup")
+            bundle._history_persisted = True
 
 
 def _persist_regime_history(bundle: MarketBundle, source: str = "startup") -> None:
@@ -602,6 +607,84 @@ async def get_regime_log(
         "history": regime_store.history(bundle.key, limit=limit),
         "transitions": regime_store.transitions(bundle.key),
     }
+
+
+STREAM_POLL_SECONDS = 10.0
+
+
+def _regime_snapshot(market: str) -> Optional[dict]:
+    """Cheap current-state snapshot for the live stream, read from the persisted
+    store (updated on refresh) plus the loaded bundle's data-currency."""
+    bundle = state.load(market)
+    if bundle is None:
+        return None
+    # Ensure the market has been backfilled at least once.
+    if not bundle._history_persisted:
+        _persist_regime_history(bundle, source="startup")
+        bundle._history_persisted = True
+
+    from data import regime_store
+
+    hist = regime_store.history(market, limit=1)
+    if not hist:
+        return None
+    latest = hist[0]
+    ds = bundle.data_status
+    return {
+        "market": market,
+        "regime": latest["regime"],
+        "confidence": latest["confidence"],
+        "as_of": latest["as_of"],
+        "data_through": (ds.get("prices_through")
+                         or ds.get("returns_through")
+                         or ds.get("macro_through")),
+        "ts": datetime.now().isoformat(),
+    }
+
+
+async def _regime_event_stream(market: str, request: Request):
+    """
+    Server-Sent Events generator. Emits a ``regime`` event on connect and again
+    only when the persisted state actually changes (regime, confidence or data
+    date), with ``: keepalive`` comments in between.
+
+    Macro inputs are monthly, so genuine change events are infrequent by nature
+    — the stream's real job is to push the new state the moment a live refresh
+    lands (triggered here or by the scheduler) without the client polling.
+    """
+    last_sig = None
+    while True:
+        if await request.is_disconnected():
+            break
+        snap = _regime_snapshot(market)
+        if snap is not None:
+            sig = (snap["regime"], snap["confidence"],
+                   snap["as_of"], snap["data_through"])
+            if sig != last_sig:
+                last_sig = sig
+                yield f"event: regime\ndata: {json.dumps(snap)}\n\n"
+            else:
+                yield ": keepalive\n\n"
+        else:
+            yield ": waiting-for-data\n\n"
+        await asyncio.sleep(STREAM_POLL_SECONDS)
+
+
+@app.get("/stream/regime")
+async def stream_regime(request: Request, market: str = Query(default="us")):
+    """Live regime channel (SSE). See ``_regime_event_stream`` for semantics."""
+    market = (market or "us").lower()
+    if market not in MARKET_CONFIG:
+        raise HTTPException(status_code=404, detail=f"Unknown market '{market}'")
+    return StreamingResponse(
+        _regime_event_stream(market, request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # disable proxy buffering for SSE
+        },
+    )
 
 
 @app.get("/regime/drivers")

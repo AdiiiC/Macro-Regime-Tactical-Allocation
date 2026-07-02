@@ -68,6 +68,7 @@ export const api = {
       method: "POST",
     }).then((r) => r.json()),
   reportUrl: (m: MarketKey) => `${BASE}/report/pdf${q(m)}`,
+  streamUrl: (m: MarketKey) => `${BASE}/stream/regime${q(m)}`,
 };
 
 export const REGIME_COLORS: Record<string, string> = {

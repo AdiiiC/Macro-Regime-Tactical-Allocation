@@ -9,7 +9,11 @@ export default defineConfig({
   testDir: "./e2e",
   timeout: 30_000,
   expect: { timeout: 10_000 },
-  fullyParallel: true,
+  // The smoke suite runs against a single-worker dev backend whose heavier
+  // analytical endpoints are CPU-bound; run specs serially so parallel browser
+  // contexts don't contend for that one worker and time out.
+  fullyParallel: false,
+  workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "list" : "line",
   use: {

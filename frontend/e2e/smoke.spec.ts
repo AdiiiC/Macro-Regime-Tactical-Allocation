@@ -20,7 +20,7 @@ test.describe("Meridian dashboard smoke", () => {
     await expect(memo).toHaveAttribute("href", /\/api\/report\/pdf\?market=us/);
   });
 
-  test("switching to India degrades gracefully", async ({ page }) => {
+  test("switching to India loads a live market", async ({ page }) => {
     await page.goto("/?market=us");
     await expect(page.getByText("MERIDIAN", { exact: true })).toBeVisible();
 
@@ -29,10 +29,16 @@ test.describe("Meridian dashboard smoke", () => {
     // India-specific asset appears in the allocation panel.
     await expect(page.getByText("Nifty 50").first()).toBeVisible();
 
-    // Risk/stress panels show the neutral unavailable note rather than crashing.
+    // India now carries live returns, so the backtest panel renders its
+    // equity chart rather than an unavailable note.
     await expect(
-      page.getByText(/Asset return data is not available for India/).first()
+      page.getByText("Strategy backtest", { exact: false }).first()
     ).toBeVisible();
+
+    // Memo export retargets at the India report.
+    await expect(
+      page.getByRole("link", { name: /Memo/i })
+    ).toHaveAttribute("href", /\/api\/report\/pdf\?market=india/);
   });
 
   test("theme toggle switches to light mode", async ({ page }) => {
