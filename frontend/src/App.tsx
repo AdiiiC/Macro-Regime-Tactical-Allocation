@@ -212,7 +212,10 @@ export default function App() {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      await api.refresh(market);
+      // Pull fresh FRED + market data (up to yesterday), then reload models.
+      await api.refresh(market, true);
+      const mk = await api.markets().catch(() => null);
+      if (mk) setMarkets(mk.markets);
       loadMarket(market);
     } finally {
       setRefreshing(false);
@@ -248,6 +251,7 @@ export default function App() {
   }
 
   const updated = new Date(core.health.last_updated);
+  const dataThrough = markets.find((m) => m.key === market)?.data_through ?? null;
 
   return (
     <div className="app">
@@ -289,7 +293,7 @@ export default function App() {
 
           <button
             className="icon-btn"
-            title="Refresh models from latest data"
+            title="Pull fresh FRED + market data (up to yesterday) and reload"
             onClick={onRefresh}
             disabled={refreshing}
           >
@@ -302,12 +306,14 @@ export default function App() {
 
           <div className="status">
             <span className={`status__dot ${core.health.model_loaded ? "ok" : "bad"}`} />
-            <span className="mono ink-3">
-              {updated.toLocaleDateString(undefined, {
-                year: "numeric",
-                month: "short",
-                day: "2-digit",
-              })}
+            <span className="mono ink-3 has-tip" data-tip="Latest data date used by the models (prices through the previous trading day).">
+              {dataThrough
+                ? `data · ${dataThrough}`
+                : updated.toLocaleDateString(undefined, {
+                    year: "numeric",
+                    month: "short",
+                    day: "2-digit",
+                  })}
             </span>
           </div>
         </div>

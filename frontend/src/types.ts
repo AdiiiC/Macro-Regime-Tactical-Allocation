@@ -8,11 +8,24 @@ export interface MarketInfo {
   currency: string;
   loaded: boolean;
   has_returns: boolean;
+  data_through?: string | null;
   assets: string[];
 }
 
 export interface MarketsResponse {
   markets: MarketInfo[];
+}
+
+export interface DataStatusEntry {
+  as_of?: string | null;
+  macro_through?: string | null;
+  returns_through?: string | null;
+  prices_through?: string | null;
+}
+
+export interface DataStatus {
+  as_of: string;
+  markets: Record<string, DataStatusEntry>;
 }
 
 export interface Health {

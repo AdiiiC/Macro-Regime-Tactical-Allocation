@@ -31,6 +31,7 @@ from config.india_settings import (
     INDIA_BENCHMARK_ALLOCATION,
     INDIA_ASSET_TICKERS,
     INDIA_REGIME_EXPLANATIONS,
+    INDIA_STRESS_SCENARIOS,
 )
 from models.regime_hmm import RegimeDetector
 from models.allocator import TacticalAllocator
@@ -117,6 +118,17 @@ VALID_REGIMES = ["Expansion", "Slowdown", "Recession", "Recovery"]
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "cache")
 
+
+def get_data_status(key: str) -> dict:
+    """Per-market data-currency metadata written by ``data.refresh`` (empty
+    dict if the cache has never been refreshed via the live pipeline)."""
+    try:
+        from data.refresh import load_meta
+
+        return load_meta().get(key, {})
+    except Exception:  # noqa: BLE001
+        return {}
+
 MARKET_CONFIG = {
     "us": {
         "label": "United States",
@@ -126,6 +138,7 @@ MARKET_CONFIG = {
         "benchmark": BENCHMARK_ALLOCATION,
         "asset_tickers": ASSET_TICKERS,
         "explanations": None,  # use allocator.get_regime_tilt_explanation
+        "stress_scenarios": STRESS_SCENARIOS,
         "currency": "USD",
     },
     "india": {
@@ -136,6 +149,7 @@ MARKET_CONFIG = {
         "benchmark": INDIA_BENCHMARK_ALLOCATION,
         "asset_tickers": INDIA_ASSET_TICKERS,
         "explanations": INDIA_REGIME_EXPLANATIONS,
+        "stress_scenarios": INDIA_STRESS_SCENARIOS,
         "currency": "INR",
     },
 }
@@ -152,6 +166,7 @@ class MarketBundle:
         self.benchmark = cfg["benchmark"]
         self.asset_tickers = cfg["asset_tickers"]
         self.explanations = cfg["explanations"]
+        self.stress_scenarios = cfg.get("stress_scenarios", STRESS_SCENARIOS)
 
         macro_path = os.path.join(CACHE_DIR, cfg["macro_file"])
         returns_path = os.path.join(CACHE_DIR, cfg["returns_file"])
@@ -168,6 +183,18 @@ class MarketBundle:
             and len(self.market_returns) > 0
             and self.market_returns.index.notna().all()
         )
+
+        # Data-currency: prefer the refresh metadata, fall back to the actual
+        # last observation in the loaded frames.
+        meta = get_data_status(key)
+        self.data_status = {
+            "as_of": meta.get("refreshed_at"),
+            "macro_through": meta.get("macro_through")
+            or (str(self.macro_features.index.max())[:10] if len(self.macro_features) else None),
+            "returns_through": meta.get("returns_through")
+            or (str(self.market_returns.index.max())[:10] if self.has_returns else None),
+            "prices_through": meta.get("prices_through"),
+        }
 
         self.detector = RegimeDetector(n_regimes=4, n_components_pca=5)
         self.detector.fit(self.macro_features)
@@ -415,9 +442,22 @@ async def list_markets():
             "currency": cfg["currency"],
             "loaded": key in state.markets,
             "has_returns": bool(bundle.has_returns) if bundle else False,
+            "data_through": (bundle.data_status.get("prices_through")
+                             or bundle.data_status.get("returns_through")
+                             or bundle.data_status.get("macro_through")) if bundle else None,
             "assets": list(cfg["asset_tickers"].keys()),
         })
     return {"markets": out}
+
+
+@app.get("/data/status")
+async def data_status():
+    """Freshness of the underlying data per market (from the live refresh)."""
+    out = {}
+    for key in MARKET_CONFIG:
+        bundle = state.load(key)
+        out[key] = bundle.data_status if bundle else get_data_status(key)
+    return {"as_of": datetime.now().isoformat(), "markets": out}
 
 
 @app.get("/regime/current", response_model=RegimeResponse)
@@ -812,7 +852,7 @@ async def get_stress_scenarios(market: str = Query(default="us")):
     weights = bundle.allocator.get_target_allocation(current, confidence)
 
     results = {}
-    for name, shocks in STRESS_SCENARIOS.items():
+    for name, shocks in bundle.stress_scenarios.items():
         impact = sum(weights.get(a, 0) * shocks.get(a, 0) for a in weights.index)
         results[name] = {"portfolio_impact": impact, "shocks": shocks}
 
@@ -857,18 +897,49 @@ async def get_pdf_report(market: str = Query(default="us")):
 
 
 @app.post("/model/refresh")
-async def refresh_model(market: str = Query(default="us")):
-    """Reload a market's models from the latest cached data."""
+async def refresh_model(
+    market: str = Query(default="us"),
+    live: bool = Query(
+        default=False,
+        description="Pull fresh FRED/market data up to yesterday before reloading.",
+    ),
+):
+    """Reload a market's models. With ``live=true`` the underlying caches are
+    first refreshed from FRED + Yahoo Finance (up to the previous day)."""
     market = (market or "us").lower()
     if market not in MARKET_CONFIG:
         raise HTTPException(status_code=404, detail=f"Unknown market '{market}'")
+
+    refresh_report = None
+    if live:
+        try:
+            from data.refresh import refresh_all
+
+            refresh_report = refresh_all([market]).get("markets", {}).get(market)
+            if refresh_report and refresh_report.get("status") == "error":
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Live data refresh failed: {refresh_report.get('error')}",
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"Live refresh error: {exc}")
+
     bundle = state.refresh(market)
     if bundle is None:
         raise HTTPException(
             status_code=500,
             detail=state.load_errors.get(market, "refresh failed"),
         )
-    return {"status": "refreshed", "market": market, "timestamp": bundle.last_updated}
+    return {
+        "status": "refreshed",
+        "market": market,
+        "live": live,
+        "timestamp": bundle.last_updated,
+        "data_status": bundle.data_status,
+        "refresh_report": refresh_report,
+    }
 
 
 # ─── Run ───────────────────────────────────────────────────────────────────────

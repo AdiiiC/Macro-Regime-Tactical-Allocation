@@ -4,6 +4,7 @@ import type {
   BenchmarkVariant,
   ComparisonResult,
   CurrentRegime,
+  DataStatus,
   DriversResult,
   Health,
   MarketKey,
@@ -58,8 +59,11 @@ export const api = {
   var: (m: MarketKey, horizon: number, simulations = 10000) =>
     get<VarResult>(`/risk/var${q(m, `horizon=${horizon}&simulations=${simulations}`)}`),
   stress: (m: MarketKey) => get<StressResult>(`/risk/stress-scenarios${q(m)}`),
-  refresh: (m: MarketKey) =>
-    fetch(`${BASE}/model/refresh${q(m)}`, { method: "POST" }).then((r) => r.json()),
+  dataStatus: () => get<DataStatus>("/data/status"),
+  refresh: (m: MarketKey, live = false) =>
+    fetch(`${BASE}/model/refresh${q(m, live ? "live=true" : "")}`, {
+      method: "POST",
+    }).then((r) => r.json()),
   reportUrl: (m: MarketKey) => `${BASE}/report/pdf${q(m)}`,
 };
 

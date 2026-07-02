@@ -41,6 +41,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/data/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Data Status
+         * @description Freshness of the underlying data per market (from the live refresh).
+         */
+        get: operations["data_status_data_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/regime/current": {
         parameters: {
             query?: never;
@@ -286,7 +306,8 @@ export interface paths {
         put?: never;
         /**
          * Refresh Model
-         * @description Reload a market's models from the latest cached data.
+         * @description Reload a market's models. With ``live=true`` the underlying caches are
+         *     first refreshed from FRED + Yahoo Finance (up to the previous day).
          */
         post: operations["refresh_model_model_refresh_post"];
         delete?: never;
@@ -413,6 +434,26 @@ export interface operations {
         };
     };
     list_markets_markets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    data_status_data_status_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -815,6 +856,8 @@ export interface operations {
         parameters: {
             query?: {
                 market?: string;
+                /** @description Pull fresh FRED/market data up to yesterday before reloading. */
+                live?: boolean;
             };
             header?: never;
             path?: never;

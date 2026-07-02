@@ -85,9 +85,11 @@ def test_sensitivity_sweep_grid(client):
     assert {"cost_bps", "rebalance_months", "sharpe"} <= set(cell.keys())
 
 
-def test_sensitivity_india_degrades_gracefully(client):
+def test_sensitivity_india_now_live(client):
+    """India now carries real market returns, so the sweep computes."""
     r = client.get("/backtest/sensitivity?market=india")
-    assert r.status_code == 501
+    assert r.status_code == 200
+    assert r.json()["cells"]
 
 
 def test_drivers_schema(client):
@@ -117,15 +119,43 @@ def test_india_regime_available(client):
     }
 
 
-def test_india_risk_degrades_gracefully(client):
-    """India lacks market-return history: risk analytics return 501, not 500."""
+def test_india_risk_now_live(client):
+    """India carries live market-return history: risk analytics compute."""
     r = client.get("/risk/var?market=india&horizon=12")
-    assert r.status_code == 501
+    assert r.status_code == 200
+    assert "var_95" in r.json()
 
 
-def test_india_backtest_degrades_gracefully(client):
+def test_india_backtest_now_live(client):
     r = client.get("/backtest?market=india")
-    assert r.status_code == 501
+    assert r.status_code == 200
+    body = r.json()
+    assert body["equity_curve"]
+    assert body["currency"] == "INR"
+
+
+def test_india_stress_uses_india_scenarios(client):
+    """India stress uses India-calibrated scenarios (non-zero, INR assets)."""
+    r = client.get("/risk/stress-scenarios?market=india")
+    assert r.status_code == 200
+    scenarios = r.json()["scenarios"]
+    assert "Rupee Crisis (FII Outflows)" in scenarios
+    # At least one scenario has a materially non-zero portfolio impact.
+    impacts = [abs(s["portfolio_impact"]) for s in scenarios.values()]
+    assert max(impacts) > 0.005
+
+
+def test_data_status_reports_currency(client):
+    r = client.get("/data/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert "us" in body["markets"] and "india" in body["markets"]
+    # Every loaded market should report some 'through' date.
+    for entry in body["markets"].values():
+        assert any(
+            entry.get(k)
+            for k in ("prices_through", "returns_through", "macro_through")
+        )
 
 
 def test_unknown_market_is_404(client):

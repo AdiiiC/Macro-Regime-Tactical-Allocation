@@ -53,7 +53,7 @@ INDIA_ASSET_TICKERS = {
     "Bank_Nifty": "^NSEBANK",
     "Nifty_Midcap": "NIFTYMIDCAP150.NS",
     "Gold_INR": "GOLDBEES.NS",
-    "G_Sec_Long": "0GILTS.NS",  # Long-term gilt fund proxy
+    "G_Sec_Long": "SETF10GILT.NS",  # SBI-ETF 10Y Gilt (long-duration G-Sec proxy)
     "Liquid_Fund": "LIQUIDBEES.NS",
     "Nifty_IT": "^CNXIT",
 }
@@ -155,5 +155,44 @@ INDIA_REGIME_EXPLANATIONS = {
         "overweight": ["Bank Nifty (credit cycle)", "Nifty 50", "Midcap (recovery beta)"],
         "underweight": ["Liquid Funds (opportunity cost)", "Excessive gold"],
         "key_risks": ["False recovery", "Global contagion", "Policy reversal"],
+    },
+}
+
+
+# ─── India Stress Scenarios ───────────────────────────────────────────────────
+# Asset-class shock vectors (total return, INR terms) approximating how Indian
+# asset classes behaved through analogous historical stress episodes. Used for
+# scenario analysis of the current tactical allocation. These are stylized,
+# historically-grounded estimates — not point forecasts.
+INDIA_STRESS_SCENARIOS = {
+    "2008 GFC Replay": {
+        "Nifty_50": -0.52, "Bank_Nifty": -0.55, "Nifty_Midcap": -0.65,
+        "Gold_INR": 0.25, "G_Sec_Long": 0.08, "Liquid_Fund": 0.02,
+        "Nifty_IT": -0.50,
+    },
+    "2020 COVID Crash": {
+        "Nifty_50": -0.38, "Bank_Nifty": -0.45, "Nifty_Midcap": -0.40,
+        "Gold_INR": 0.08, "G_Sec_Long": 0.04, "Liquid_Fund": 0.01,
+        "Nifty_IT": -0.35,
+    },
+    "Stagflation Shock": {
+        "Nifty_50": -0.22, "Bank_Nifty": -0.25, "Nifty_Midcap": -0.30,
+        "Gold_INR": 0.15, "G_Sec_Long": -0.10, "Liquid_Fund": 0.03,
+        "Nifty_IT": -0.20,
+    },
+    "RBI Rate Shock (+300bps)": {
+        "Nifty_50": -0.15, "Bank_Nifty": -0.20, "Nifty_Midcap": -0.22,
+        "Gold_INR": -0.03, "G_Sec_Long": -0.14, "Liquid_Fund": 0.04,
+        "Nifty_IT": -0.12,
+    },
+    "Rupee Crisis (FII Outflows)": {
+        "Nifty_50": -0.18, "Bank_Nifty": -0.20, "Nifty_Midcap": -0.22,
+        "Gold_INR": 0.22, "G_Sec_Long": -0.08, "Liquid_Fund": 0.01,
+        "Nifty_IT": 0.08,
+    },
+    "Global Tech Selloff": {
+        "Nifty_50": -0.18, "Bank_Nifty": -0.12, "Nifty_Midcap": -0.20,
+        "Gold_INR": 0.05, "G_Sec_Long": 0.04, "Liquid_Fund": 0.02,
+        "Nifty_IT": -0.35,
     },
 }
