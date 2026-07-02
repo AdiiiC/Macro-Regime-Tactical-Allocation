@@ -64,10 +64,22 @@ def test_backtest_us_has_curve_and_metrics(client):
 
 def test_backtest_benchmark_variants(client):
     """Each benchmark variant returns 200 and echoes its own name."""
-    for variant in ("sixty_forty", "equal_weight", "risk_parity"):
+    for variant in ("sixty_forty", "equal_weight", "risk_parity", "kelly"):
         r = client.get(f"/backtest?market=us&benchmark={variant}")
         assert r.status_code == 200, variant
         assert r.json()["benchmark"] == variant
+
+
+def test_backtest_kelly_reports_capped_leverage(client):
+    """The Kelly benchmark exposes a positive, capped leverage figure."""
+    body = client.get("/backtest?market=us&benchmark=kelly").json()
+    lev = body["benchmark_leverage"]
+    assert lev is not None
+    assert 0.1 <= lev <= 1.5, lev
+    # Non-Kelly variants carry no leverage.
+    assert client.get("/backtest?market=us&benchmark=sixty_forty").json()[
+        "benchmark_leverage"
+    ] is None
 
 
 def test_backtest_unknown_benchmark_is_400(client):

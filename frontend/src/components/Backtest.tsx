@@ -8,6 +8,7 @@ const BENCH_LABEL: Record<BenchmarkVariant, string> = {
   sixty_forty: "60 / 40",
   equal_weight: "Equal wt.",
   risk_parity: "Risk parity",
+  kelly: "Kelly lev.",
 };
 
 const W = 720;
@@ -158,7 +159,7 @@ export default function Backtest({
         <span className="bt-bench__label ink-3">Benchmark</span>
         <div className="seg-ctrl">
           {(
-            ["sixty_forty", "equal_weight", "risk_parity"] as BenchmarkVariant[]
+            ["sixty_forty", "equal_weight", "risk_parity", "kelly"] as BenchmarkVariant[]
           ).map((v) => (
             <button
               key={v}
@@ -170,6 +171,11 @@ export default function Backtest({
             </button>
           ))}
         </div>
+        {benchmark === "kelly" && data.benchmark_leverage != null && (
+          <span className="bt-bench__note ink-3">
+            {data.benchmark_leverage.toFixed(2)}× half-Kelly, borrow @ 4%
+          </span>
+        )}
       </div>
 
       <div className="bt-metrics">

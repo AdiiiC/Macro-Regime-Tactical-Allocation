@@ -126,12 +126,13 @@ export interface RegimeAttribution {
   avg_monthly_return: number;
 }
 
-export type BenchmarkVariant = "sixty_forty" | "equal_weight" | "risk_parity";
+export type BenchmarkVariant = "sixty_forty" | "equal_weight" | "risk_parity" | "kelly";
 
 export interface BacktestResult {
   market: string;
   currency: string;
   benchmark: BenchmarkVariant;
+  benchmark_leverage?: number | null;
   start: string;
   end: string;
   metrics: BacktestMetrics;

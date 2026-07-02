@@ -324,7 +324,13 @@ def _run_backtest(bundle: MarketBundle):
     return result
 
 
-BENCHMARK_VARIANTS = ("sixty_forty", "equal_weight", "risk_parity")
+BENCHMARK_VARIANTS = ("sixty_forty", "equal_weight", "risk_parity", "kelly")
+
+# Annual risk-free rate used for Kelly leverage and the borrowing leg of the
+# levered benchmark. Kept conservative and explicit rather than pulled live so
+# the benchmark construction is reproducible.
+KELLY_RF = 0.04
+KELLY_MAX_LEVERAGE = 1.5
 
 
 def _benchmark_weights(bundle: MarketBundle, variant: str) -> dict:
@@ -364,6 +370,60 @@ def _run_backtest_custom(
         benchmark_weights=benchmark_weights,
         rebalance_every_n=rebalance_every_n,
     )
+
+
+def _kelly_levered_benchmark(bundle: MarketBundle, pv: pd.Series):
+    """
+    Build an honest Kelly-levered benchmark equity curve aligned to ``pv``.
+
+    The BacktestEngine renormalizes any benchmark weight vector to sum to 1, so
+    leverage cannot be expressed through the weight path. Instead we:
+
+      1. Compute long-only multi-asset (half-)Kelly proportions as the base
+         portfolio and take its realized monthly return stream.
+      2. Size a single capped half-Kelly leverage ``L`` from that base
+         portfolio's annualized mean/vol.
+      3. Lever the stream with an explicit borrowing cost at the risk-free rate:
+         ``r_lev = rf_m + L * (r_base - rf_m)`` — when ``L > 1`` the shortfall
+         ``(1 - L)`` is borrowed at ``rf``.
+
+    Returns ``(benchmark_value, leverage)`` where ``benchmark_value`` is indexed
+    like ``pv`` (first point = 1.0 seed, scale is irrelevant since the endpoint
+    normalizes to 100 and metrics use pct-change).
+    """
+    from models.leverage import KellyCriterion
+
+    rets = bundle.market_returns
+    kelly = KellyCriterion(
+        max_leverage=KELLY_MAX_LEVERAGE, min_leverage=0.0, kelly_fraction=0.5
+    )
+
+    mu = rets.mean() * 12.0
+    cov = rets.cov() * 12.0
+    raw = kelly.compute_multi_asset_kelly(mu, cov, risk_free_rate=KELLY_RF)
+
+    # Long-only proportions for the base portfolio (drop negative Kelly tilts).
+    w = raw.clip(lower=0.0)
+    w = (w / w.sum()) if w.sum() > 0 else pd.Series(
+        1.0 / len(rets.columns), index=rets.columns
+    )
+
+    base_ret = (rets * w).sum(axis=1)
+    ann_mu = float(base_ret.mean() * 12.0)
+    ann_vol = float(base_ret.std() * math.sqrt(12.0))
+    lev = float(np.clip(
+        kelly.compute_kelly_leverage(ann_mu, ann_vol, risk_free_rate=KELLY_RF),
+        0.1, KELLY_MAX_LEVERAGE,
+    ))
+
+    rf_m = KELLY_RF / 12.0
+    lev_ret = rf_m + lev * (base_ret - rf_m)
+
+    bv = pd.Series(index=pv.index, dtype=float)
+    bv.iloc[0] = 1.0
+    growth = (1.0 + lev_ret.reindex(pv.index[1:]).fillna(0.0)).cumprod()
+    bv.iloc[1:] = growth.values
+    return bv, lev
 
 
 def _annualized_metrics(pv: pd.Series, bv: pd.Series) -> dict:
@@ -587,7 +647,8 @@ async def get_backtest(
     P&L attribution and numeric performance metrics.
 
     `benchmark` selects the comparison construction: sixty_forty (static),
-    equal_weight, or risk_parity (equal risk contribution).
+    equal_weight, risk_parity (equal risk contribution), or kelly (a capped
+    half-Kelly-levered tangency portfolio with an explicit borrowing cost).
     """
     bundle = get_bundle(market)
     require_returns(bundle)
@@ -598,13 +659,19 @@ async def get_backtest(
             detail=f"Invalid benchmark. Must be one of: {list(BENCHMARK_VARIANTS)}",
         )
 
+    benchmark_leverage = None
     if benchmark == "sixty_forty":
         result = _run_backtest(bundle)
+        pv = result.portfolio_value
+        bv = result.benchmark_value.reindex(pv.index).ffill()
+    elif benchmark == "kelly":
+        result = _run_backtest(bundle)
+        pv = result.portfolio_value
+        bv, benchmark_leverage = _kelly_levered_benchmark(bundle, pv)
     else:
         result = _run_backtest_custom(bundle, _benchmark_weights(bundle, benchmark))
-
-    pv = result.portfolio_value
-    bv = result.benchmark_value.reindex(pv.index).ffill()
+        pv = result.portfolio_value
+        bv = result.benchmark_value.reindex(pv.index).ffill()
 
     # Normalize both curves to 100 at inception for chart friendliness.
     pv0, bv0 = pv.iloc[0], bv.iloc[0]
@@ -655,6 +722,7 @@ async def get_backtest(
         "market": bundle.key,
         "currency": bundle.currency,
         "benchmark": benchmark,
+        "benchmark_leverage": benchmark_leverage,
         "start": str(pv.index[0].date()),
         "end": str(pv.index[-1].date()),
         "metrics": _annualized_metrics(pv, bv),

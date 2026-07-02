@@ -184,7 +184,8 @@ export interface paths {
          *     P&L attribution and numeric performance metrics.
          *
          *     `benchmark` selects the comparison construction: sixty_forty (static),
-         *     equal_weight, or risk_parity (equal risk contribution).
+         *     equal_weight, risk_parity (equal risk contribution), or kelly (a capped
+         *     half-Kelly-levered tangency portfolio with an explicit borrowing cost).
          */
         get: operations["get_backtest_backtest_get"];
         put?: never;
