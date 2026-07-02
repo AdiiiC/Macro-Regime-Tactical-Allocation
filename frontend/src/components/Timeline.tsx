@@ -1,20 +1,35 @@
-import { useMemo, useState } from "react";
-import type { RegimeHistory } from "../types";
-import { REGIME_COLORS, REGIME_ORDER } from "../api";
+import { useEffect, useMemo, useState } from "react";
+import type { MarketKey, RegimeHistory, RegimeTransition } from "../types";
+import { api, REGIME_COLORS, REGIME_ORDER } from "../api";
 
 const RANGES = [12, 36, 60, 120];
 
 export default function Timeline({
   data,
   months,
+  market,
   onRange,
 }: {
   data: RegimeHistory;
   months: number;
+  market: MarketKey;
   onRange: (m: number) => void;
 }) {
   const [hover, setHover] = useState<number | null>(null);
+  const [transitions, setTransitions] = useState<RegimeTransition[]>([]);
   const points = data.regimes;
+
+  // Pull the persisted (SQLite) regime transition log for this market.
+  useEffect(() => {
+    let active = true;
+    api
+      .regimeLog(market)
+      .then((log) => active && setTransitions(log.transitions))
+      .catch(() => active && setTransitions([]));
+    return () => {
+      active = false;
+    };
+  }, [market]);
 
   const segments = useMemo(() => {
     // Collapse consecutive same-regime months into bands.
@@ -98,6 +113,37 @@ export default function Timeline({
           </span>
         ))}
       </div>
+
+      {transitions.length > 1 && (
+        <div className="timeline__transitions">
+          <span className="eyebrow ink-3">
+            Recorded transitions · {transitions.length - 1}
+          </span>
+          <ul className="tl-trans">
+            {transitions
+              .filter((t) => t.from !== null)
+              .slice(-4)
+              .reverse()
+              .map((t) => (
+                <li className="tl-trans__row" key={t.as_of}>
+                  <span className="mono ink-3">{t.as_of}</span>
+                  <span className="tl-trans__flip">
+                    <span style={{ color: REGIME_COLORS[t.from as string] }}>
+                      {t.from}
+                    </span>
+                    <span className="ink-3"> → </span>
+                    <span style={{ color: REGIME_COLORS[t.to] }}>{t.to}</span>
+                  </span>
+                  {t.confidence != null && (
+                    <span className="mono ink-3">
+                      {(t.confidence * 100).toFixed(0)}%
+                    </span>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

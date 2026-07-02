@@ -54,6 +54,27 @@ export interface RegimeHistory {
   count: number;
 }
 
+export interface RegimeLogEntry {
+  as_of: string;
+  regime: RegimeName;
+  confidence: number | null;
+  source: string;
+  recorded_at: string;
+}
+
+export interface RegimeTransition {
+  as_of: string;
+  from: RegimeName | null;
+  to: RegimeName;
+  confidence: number | null;
+}
+
+export interface RegimeLog {
+  market: string;
+  history: RegimeLogEntry[];
+  transitions: RegimeTransition[];
+}
+
 export interface TransitionMatrix {
   matrix: Record<string, Record<string, number>>;
   regimes: string[];

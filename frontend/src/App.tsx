@@ -329,7 +329,7 @@ export default function App() {
           ) : (
             <PanelSkeleton title="Regime drivers" rows={6} />
           )}
-          <Timeline data={core.history} months={months} onRange={setMonths} />
+          <Timeline data={core.history} months={months} market={market} onRange={setMonths} />
           <Allocation
             live={core.allocation}
             market={market}

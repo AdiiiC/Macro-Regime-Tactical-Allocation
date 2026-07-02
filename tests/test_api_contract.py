@@ -112,6 +112,23 @@ def test_drivers_schema(client):
     assert {"feature", "z_score"} <= set(body["drivers"][0].keys())
 
 
+def test_regime_log_persisted(client):
+    """The SQLite-backed regime log returns a backfilled history + transitions."""
+    body = client.get("/regime/log?market=us&limit=50").json()
+    assert body["history"], "history should be non-empty"
+    row = body["history"][0]
+    assert {"as_of", "regime", "source"} <= set(row.keys())
+    assert row["regime"] in {"Expansion", "Slowdown", "Recession", "Recovery"}
+    # Newest-first ordering.
+    dates = [r["as_of"] for r in body["history"]]
+    assert dates == sorted(dates, reverse=True)
+    # Transitions record label changes with from/to.
+    if body["transitions"]:
+        t = body["transitions"][-1]
+        assert {"as_of", "from", "to"} <= set(t.keys())
+        assert t["to"] != t["from"]
+
+
 def test_model_comparison_has_primary(client):
     r = client.get("/model/comparison?market=us")
     assert r.status_code == 200

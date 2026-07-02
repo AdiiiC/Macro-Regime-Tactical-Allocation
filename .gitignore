@@ -15,6 +15,7 @@ build/
 data/cache/*.parquet
 data/cache/*.pkl
 data/cache/_meta.json
+data/regime_history.db
 
 # IDE
 .vscode/

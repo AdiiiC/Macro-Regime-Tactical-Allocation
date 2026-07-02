@@ -112,6 +112,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/regime/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Regime Log
+         * @description Persisted regime timeline from the SQLite store: the backfilled monthly
+         *     series merged with any live refresh reads, plus the discrete transitions.
+         *     Reflects the historical record on disk rather than a fresh recompute.
+         */
+        get: operations["get_regime_log_regime_log_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/regime/drivers": {
         parameters: {
             query?: never;
@@ -541,6 +563,38 @@ export interface operations {
         parameters: {
             query?: {
                 market?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_regime_log_regime_log_get: {
+        parameters: {
+            query?: {
+                market?: string;
+                limit?: number;
             };
             header?: never;
             path?: never;

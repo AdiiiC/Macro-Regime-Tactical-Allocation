@@ -208,6 +208,7 @@ class MarketBundle:
         # Lazily populated caches
         self._backtest = None
         self._comparison = None
+        self._history_persisted = False
 
     # -- convenience --------------------------------------------------------
     def current(self):
@@ -267,6 +268,9 @@ def get_bundle(market: str) -> MarketBundle:
             detail=f"Market '{market}' unavailable: "
             f"{state.load_errors.get(market, 'not loaded')}",
         )
+    if not bundle._history_persisted:
+        _persist_regime_history(bundle, source="startup")
+        bundle._history_persisted = True
     return bundle
 
 
@@ -299,7 +303,29 @@ def _finite0(v) -> float:
 @app.on_event("startup")
 async def startup_event():
     # Eagerly load US so the default experience is instant; India loads on demand.
-    state.load("us")
+    bundle = state.load("us")
+    if bundle is not None:
+        _persist_regime_history(bundle, source="startup")
+        bundle._history_persisted = True
+
+
+def _persist_regime_history(bundle: MarketBundle, source: str = "startup") -> None:
+    """
+    Backfill the full monthly regime series into the SQLite store and log the
+    latest read. Never raises — persistence is best-effort and must not break
+    the API if the DB is unavailable.
+    """
+    try:
+        from data import regime_store
+
+        current, confidence, regimes, proba = bundle.current()
+        confidences = proba.max(axis=1)
+        regime_store.backfill_series(bundle.key, regimes, confidences)
+        regime_store.log_read(
+            bundle.key, str(regimes.index[-1].date()), current, confidence, source
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"Warning: regime history persistence failed for '{bundle.key}': {exc}")
 
 
 # ─── Backtest helpers ──────────────────────────────────────────────────────────
@@ -556,6 +582,26 @@ async def get_transition_matrix(market: str = Query(default="us")):
     bundle = get_bundle(market)
     trans = bundle.detector.get_transition_matrix()
     return {"matrix": trans.to_dict(), "regimes": trans.index.tolist()}
+
+
+@app.get("/regime/log")
+async def get_regime_log(
+    market: str = Query(default="us"),
+    limit: int = Query(default=120, ge=1, le=1000),
+):
+    """
+    Persisted regime timeline from the SQLite store: the backfilled monthly
+    series merged with any live refresh reads, plus the discrete transitions.
+    Reflects the historical record on disk rather than a fresh recompute.
+    """
+    bundle = get_bundle(market)  # ensures the market is loaded & backfilled
+    from data import regime_store
+
+    return {
+        "market": bundle.key,
+        "history": regime_store.history(bundle.key, limit=limit),
+        "transitions": regime_store.transitions(bundle.key),
+    }
 
 
 @app.get("/regime/drivers")
@@ -1000,6 +1046,9 @@ async def refresh_model(
             status_code=500,
             detail=state.load_errors.get(market, "refresh failed"),
         )
+    # Persist the post-refresh regime read (provenance 'live' when data moved).
+    _persist_regime_history(bundle, source="live" if live else "startup")
+    bundle._history_persisted = True
     return {
         "status": "refreshed",
         "market": market,

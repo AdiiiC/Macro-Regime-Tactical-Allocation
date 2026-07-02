@@ -10,6 +10,7 @@ import type {
   MarketKey,
   MarketsResponse,
   RegimeHistory,
+  RegimeLog,
   SensitivityResult,
   StressResult,
   TransitionMatrix,
@@ -44,6 +45,8 @@ export const api = {
   currentRegime: (m: MarketKey) => get<CurrentRegime>(`/regime/current${q(m)}`),
   history: (m: MarketKey, months: number) =>
     get<RegimeHistory>(`/regime/history${q(m, `months=${months}`)}`),
+  regimeLog: (m: MarketKey, limit = 120) =>
+    get<RegimeLog>(`/regime/log${q(m, `limit=${limit}`)}`),
   transition: (m: MarketKey) =>
     get<TransitionMatrix>(`/regime/transition-matrix${q(m)}`),
   drivers: (m: MarketKey, top = 8) =>
